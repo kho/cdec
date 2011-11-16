@@ -15,16 +15,17 @@
 
 namespace lm {
 class ProbBackoff;
+class EnumerateVocab;
 
 namespace ngram {
 class Config;
-class EnumerateVocab;
 
 namespace detail {
 uint64_t HashForVocab(const char *str, std::size_t len);
 inline uint64_t HashForVocab(const StringPiece &str) {
   return HashForVocab(str.data(), str.length());
 }
+class ProbingVocabularyHeader;
 } // namespace detail
 
 class WriteWordsWrapper : public EnumerateVocab {
@@ -61,10 +62,10 @@ class SortedVocabulary : public base::Vocabulary {
       }
     }
 
+    // Size for purposes of file writing
     static size_t Size(std::size_t entries, const Config &config);
 
     // Vocab words are [0, Bound())  Only valid after FinishedLoading/LoadedBinary.  
-    // While this number is correct, ProbingVocabulary::Bound might not be correct in some cases.  
     WordIndex Bound() const { return bound_; }
 
     // Everything else is for populating.  I'm too lazy to hide and friend these, but you'll only get a const reference anyway.
@@ -76,6 +77,9 @@ class SortedVocabulary : public base::Vocabulary {
 
     // Reorders reorder_vocab so that the IDs are sorted.  
     void FinishedLoading(ProbBackoff *reorder_vocab);
+
+    // Trie stores the correct counts including <unk> in the header.  If this was previously sized based on a count exluding <unk>, padding with 8 bytes will make it the correct size based on a count including <unk>.
+    std::size_t UnkCountChangePadding() const { return SawUnk() ? 0 : sizeof(uint64_t); }
 
     bool SawUnk() const { return saw_unk_; }
 
@@ -109,10 +113,7 @@ class ProbingVocabulary : public base::Vocabulary {
     static size_t Size(std::size_t entries, const Config &config);
 
     // Vocab words are [0, Bound()).  
-    // WARNING WARNING: returns UINT_MAX when loading binary and not enumerating vocabulary.  
-    // Fixing this bug requires a binary file format change and will be fixed with the next binary file format update.  
-    // Specifically, the binary file format does not currently indicate whether <unk> is in count or not.  
-    WordIndex Bound() const { return available_; }
+    WordIndex Bound() const { return bound_; }
 
     // Everything else is for populating.  I'm too lazy to hide and friend these, but you'll only get a const reference anyway.
     void SetupMemory(void *start, std::size_t allocated, std::size_t entries, const Config &config);
@@ -137,11 +138,13 @@ class ProbingVocabulary : public base::Vocabulary {
 
     Lookup lookup_;
 
-    WordIndex available_;
+    WordIndex bound_;
 
     bool saw_unk_;
 
     EnumerateVocab *enumerate_;
+
+    detail::ProbingVocabularyHeader *header_;
 };
 
 void MissingUnknown(const Config &config) throw(SpecialWordMissingException);

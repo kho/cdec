@@ -2,6 +2,7 @@
 #define LM_BINARY_FORMAT__
 
 #include "lm/config.hh"
+#include "lm/model_type.hh"
 #include "lm/read_arpa.hh"
 
 #include "util/file_piece.hh"
@@ -16,8 +17,6 @@
 namespace lm {
 namespace ngram {
 
-typedef enum {HASH_PROBING=0, HASH_SORTED=1, TRIE_SORTED=2, QUANT_TRIE_SORTED=3} ModelType;
-
 /*Inspect a file to determine if it is a binary lm.  If not, return false.  
  * If so, return true and set recognized to the type.  This is the only API in
  * this header designed for use by decoder authors.  
@@ -31,7 +30,13 @@ struct FixedWidthParameters {
   ModelType model_type;
   // Does the end of the file have the actual strings in the vocabulary?   
   bool has_vocabulary;
+  unsigned int search_version;
 };
+
+inline std::size_t Align8(std::size_t in) {
+  std::size_t off = in % 8;
+  return off ? (in + 8 - off) : in;
+}
 
 // Parameters stored in the header of a binary file.  
 struct Parameters {
@@ -55,11 +60,11 @@ void AdvanceOrThrow(int fd, off_t off);
 // Create just enough of a binary file to write vocabulary to it.  
 uint8_t *SetupJustVocab(const Config &config, uint8_t order, std::size_t memory_size, Backing &backing);
 // Grow the binary file for the search data structure and set backing.search, returning the memory address where the search data structure should begin.  
-uint8_t *GrowForSearch(const Config &config, std::size_t memory_size, Backing &backing);
+uint8_t *GrowForSearch(const Config &config, std::size_t vocab_pad, std::size_t memory_size, Backing &backing);
 
 // Write header to binary file.  This is done last to prevent incomplete files
 // from loading.   
-void FinishFile(const Config &config, ModelType model_type, const std::vector<uint64_t> &counts, Backing &backing);
+void FinishFile(const Config &config, ModelType model_type, unsigned int search_version, const std::vector<uint64_t> &counts, Backing &backing);
 
 namespace detail {
 
@@ -67,7 +72,7 @@ bool IsBinaryFormat(int fd);
 
 void ReadHeader(int fd, Parameters &params);
 
-void MatchCheck(ModelType model_type, const Parameters &params);
+void MatchCheck(ModelType model_type, unsigned int search_version, const Parameters &params);
 
 void SeekPastHeader(int fd, const Parameters &params);
 
@@ -85,7 +90,7 @@ template <class To> void LoadLM(const char *file, const Config &config, To &to) 
     if (detail::IsBinaryFormat(backing.file.get())) {
       Parameters params;
       detail::ReadHeader(backing.file.get(), params);
-      detail::MatchCheck(To::kModelType, params);
+      detail::MatchCheck(To::kModelType, To::kVersion, params);
       // Replace the run-time configured probing_multiplier with the one in the file.  
       Config new_config(config);
       new_config.probing_multiplier = params.fixed.probing_multiplier;

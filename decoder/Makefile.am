@@ -42,7 +42,6 @@ libcdec_a_SOURCES = \
   cfg.cc \
   dwarf.cc \
   ff_dwarf.cc \
-  apply_fsa_models.cc \
   rule_lexer.cc \
   fst_translator.cc \
   csplit.cc \
@@ -52,6 +51,7 @@ libcdec_a_SOURCES = \
   hg_io.cc \
   decoder.cc \
   hg_intersect.cc \
+  hg_sampler.cc \
   factored_lexicon_helper.cc \
   viterbi.cc \
   lattice.cc \
@@ -61,6 +61,7 @@ libcdec_a_SOURCES = \
   phrasetable_fst.cc \
   trule.cc \
   ff.cc \
+  ff_rules.cc \
   ff_wordset.cc \
   ff_charset.cc \
   ff_lm.cc \
@@ -71,6 +72,7 @@ libcdec_a_SOURCES = \
   ff_wordalign.cc \
   ff_csplit.cc \
   ff_tagger.cc \
+  ff_source_syntax.cc \
   ff_bleu.cc \
   ff_factory.cc \
   freqdict.cc \

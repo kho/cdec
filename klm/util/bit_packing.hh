@@ -86,6 +86,20 @@ inline void WriteFloat32(void *base, uint64_t bit_off, float value) {
 
 const uint32_t kSignBit = 0x80000000;
 
+inline void SetSign(float &to) {
+  FloatEnc enc;
+  enc.f = to;
+  enc.i |= kSignBit;
+  to = enc.f;
+}
+
+inline void UnsetSign(float &to) {
+  FloatEnc enc;
+  enc.f = to;
+  enc.i &= ~kSignBit;
+  to = enc.f;
+}
+
 inline float ReadNonPositiveFloat31(const void *base, uint64_t bit_off) {
   FloatEnc encoded;
   encoded.i = ReadOff(base, bit_off) >> BitPackShift(bit_off & 7, 31);
@@ -107,9 +121,20 @@ void BitPackingSanity();
 uint8_t RequiredBits(uint64_t max_value);
 
 struct BitsMask {
+  static BitsMask ByMax(uint64_t max_value) {
+    BitsMask ret;
+    ret.FromMax(max_value);
+    return ret;
+  }
+  static BitsMask ByBits(uint8_t bits) {
+    BitsMask ret;
+    ret.bits = bits;
+    ret.mask = (1ULL << bits) - 1;
+    return ret;
+  }
   void FromMax(uint64_t max_value) {
     bits = RequiredBits(max_value);
-    mask = (1 << bits) - 1;
+    mask = (1ULL << bits) - 1;
   }
   uint8_t bits;
   uint64_t mask;

@@ -12,6 +12,7 @@ build_binary_LDADD = libklm.a ../util/libklm_util.a -lz
 noinst_LIBRARIES = libklm.a
 
 libklm_a_SOURCES = \
+  bhiksha.cc \
   binary_format.cc \
   config.cc \
   lm_exception.cc \
@@ -22,6 +23,7 @@ libklm_a_SOURCES = \
   search_hashed.cc \
   search_trie.cc \
   trie.cc \
+	trie_sort.cc \
   virtual_interface.cc \
   vocab.cc
 
