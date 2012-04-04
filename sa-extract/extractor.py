@@ -57,4 +57,7 @@ if __name__ == "__main__":
                 dattrs = sgml.attrs_to_dict(attrs)
                 sent.meta = attrs
         extract_grammar(sent)
+        # make it work with parallelize.pl
+        sys.stdout.write(sgml.attrs_to_str(sent.meta) + '\n')
+        sys.stdout.flush()
 
