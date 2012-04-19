@@ -1,6 +1,7 @@
 #include "global_ff.h"
 
 #include <iostream>
+#include <sstream>
 
 #include "tdict.h"
 
@@ -28,7 +29,7 @@ struct GFFImpl {
   }
 };
 
-GlobalFeatureFunctions::GlobalFeatureFunctions() {}
+GlobalFeatureFunctions::GlobalFeatureFunctions() : pimpl(new GFFImpl) {}
 GlobalFeatureFunctions::~GlobalFeatureFunctions() { delete pimpl; }
 
 void GlobalFeatureFunctions::PrepareForInput(const TaggedSentence& sentence) {
