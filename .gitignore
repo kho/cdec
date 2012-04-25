@@ -36,6 +36,7 @@ sa-extract/sym.so
 training/lbl_model
 training/mpi_flex_optimize
 training/test_ngram
+utils/atools
 utils/dict_test
 utils/logval_test
 utils/mfcr_test
@@ -195,3 +196,4 @@ mteval/scorer_test
 phrasinator/gibbs_train_plm
 phrasinator/gibbs_train_plm_notables
 .*
+mira-vlad/kbest_mirav5

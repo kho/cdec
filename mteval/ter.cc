@@ -425,6 +425,8 @@ class TERScore : public ScoreBase<TERScore> {
 
  TERScore() : stats(0,kDUMMY_LAST_ENTRY) {}
   float ComputePartialScore() const { return 0.0;}
+  float ComputeSentScore() const {exit(1); return 0.0;}
+
   float ComputeScore() const {
     float edits = static_cast<float>(stats[kINSERTIONS] + stats[kDELETIONS] + stats[kSUBSTITUTIONS] + stats[kSHIFTS]);
     return edits / static_cast<float>(stats[kREF_WORDCOUNT]);

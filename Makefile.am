@@ -1,7 +1,7 @@
 # warning - the subdirectories in the following list should
 # be kept in topologically sorted order. Also, DO NOT introduce
 # cyclic dependencies between these directories!
-SUBDIRS = utils mteval klm/util klm/lm decoder dpmert # phrasinator training mira dpmert pro-train extools gi/pf gi/markov_al rst_pars
+SUBDIRS = utils mteval klm/util klm/lm decoder dpmert mira-vlad # phrasinator training mira dpmert pro-train extools gi/pf gi/markov_al rst_pars
 
 #gi/pyp-topics/src gi/clda/src gi/posterior-regularisation/prjava
 
