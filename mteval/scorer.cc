@@ -22,7 +22,7 @@
 using boost::shared_ptr;
 using namespace std;
 
-void Score::TimesEquals(float /*scale*/) {
+void Score::TimesEquals(float scale) {
   cerr<<"UNIMPLEMENTED except for BLEU (for MIRA): Score::TimesEquals"<<endl;abort();
 }
 
@@ -88,6 +88,7 @@ class SERScore : public ScoreBase<SERScore> {
  public:
   SERScore() : correct(0), total(0) {}
   float ComputePartialScore() const { return 0.0;}
+  float ComputeSentScore() const {return 0.0;}
   float ComputeScore() const {
     return static_cast<float>(correct) / static_cast<float>(total);
   }
@@ -157,6 +158,7 @@ class BLEUScore : public ScoreBase<BLEUScore> {
     ref_len = k;
     hyp_len = k; }
   float ComputeScore() const;
+  float ComputeSentScore() const;
   float ComputePartialScore() const;
   void ScoreDetails(string* details) const;
   void TimesEquals(float scale);
@@ -179,6 +181,7 @@ class BLEUScore : public ScoreBase<BLEUScore> {
     return hyp_ngram_counts.size();
   }
   float ComputeScore(vector<float>* precs, float* bp) const;
+  float ComputeSentScore(vector<float>* precs, float* bp) const;
   float ComputePartialScore(vector<float>* prec, float* bp) const;
   valarray<float> correct_ngram_hit_counts;
   valarray<float> hyp_ngram_counts;
@@ -430,7 +433,7 @@ float BLEUScore::ComputeScore(vector<float>* precs, float* bp) const {
   float log_bleu = 0;
   if (precs) precs->clear();
   int count = 0;
-  vector<float> total_precs(N());
+
   for (int i = 0; i < N(); ++i) {
     if (hyp_ngram_counts[i] > 0) {
       float cor_count = correct_ngram_hit_counts[i];
@@ -441,22 +444,53 @@ float BLEUScore::ComputeScore(vector<float>* precs, float* bp) const {
       log_bleu += lprec;
       ++count;
     }
-    total_precs[i] = log_bleu;
+
   }
-  vector<float> bleus(N());
+  log_bleu /= static_cast<float>(count);
   float lbp = 0.0;
   if (hyp_len < ref_len)
     lbp = (hyp_len - ref_len) / hyp_len;
   log_bleu += lbp;
   if (bp) *bp = exp(lbp);
-  float wb = 0;
-  for (int i = 0; i < N(); ++i) {
-    bleus[i] = exp(total_precs[i] / (i+1) + lbp);
-    wb += bleus[i] / pow(2.0, 4.0 - i);
-  }
-  //return wb;
-  return bleus.back();
+  return exp(log_bleu);
 }
+
+
+float BLEUScore::ComputeSentScore(vector<float>* precs, float* bp) const {
+  bool DEBUG_SCORE = false;
+  float log_bleu = 0;
+  if (precs) precs->clear();
+  int count = 4;
+  float lprec=0;
+  float smooth_factor=1.0;
+
+  for (int i = 0; i < hyp_ngram_counts.size(); ++i) {
+
+    if(hyp_ngram_counts[i] > 0)
+      {
+	if (correct_ngram_hit_counts[i] > 0) {
+          lprec = log(correct_ngram_hit_counts[i]) - log(hyp_ngram_counts[i]);}
+        else
+	  {
+	    smooth_factor *= 0.5;
+	    lprec = log(smooth_factor) - log(hyp_ngram_counts[i]);
+	  }
+        if (precs) precs->push_back(exp(lprec));
+        log_bleu += lprec;
+	//      ++count;
+      }
+  }
+
+
+  log_bleu /= static_cast<float>(count);
+  float lbp = 0.0;
+  if (hyp_len < ref_len)
+    lbp = (hyp_len - ref_len) / hyp_len;
+  log_bleu += lbp;
+  if (bp) *bp = exp(lbp);
+  return exp(log_bleu);
+}
+
 
 
 //comptue scaled score for oracle retrieval
@@ -490,6 +524,10 @@ float BLEUScore::ComputePartialScore() const {
 
 float BLEUScore::ComputeScore() const {
   return ComputeScore(NULL, NULL);
+}
+
+float BLEUScore::ComputeSentScore() const {
+  return ComputeSentScore(NULL,NULL);
 }
 
 void BLEUScore::Subtract(const Score& rhs, Score* res) const {
