@@ -3,9 +3,9 @@ AM_INIT_AUTOMAKE(cdec,0.1)
 AC_CONFIG_HEADERS(config.h)
 AC_PROG_LIBTOOL
 AC_PROG_LEX
-case $LEX in 
-:) AC_MSG_ERROR([No lex (Flex, lex, etc.) program found]);; 
-esac 
+case $LEX in
+:) AC_MSG_ERROR([No lex (Flex, lex, etc.) program found]);;
+esac
 # CPPFLAGS="$CPPFLAGS -std=c++0x"
 AC_PROG_CC
 AC_PROG_CXX
@@ -130,4 +130,4 @@ then
   AM_CONDITIONAL([GLC], true)
 fi
 
-AC_OUTPUT(Makefile rst_parser/Makefile utils/Makefile mteval/Makefile extools/Makefile decoder/Makefile phrasinator/Makefile training/Makefile dpmert/Makefile pro-train/Makefile klm/util/Makefile klm/lm/Makefile mira/Makefile mira-vlad/Makefile gi/pyp-topics/src/Makefile gi/clda/src/Makefile gi/pf/Makefile gi/markov_al/Makefile)
+AC_OUTPUT(Makefile rst_parser/Makefile utils/Makefile mteval/Makefile extools/Makefile decoder/Makefile phrasinator/Makefile training/Makefile dpmert/Makefile pro-train/Makefile rampion/Makefile klm/util/Makefile klm/lm/Makefile mira/Makefile mira-vlad/Makefile dtrain/Makefile gi/pyp-topics/src/Makefile gi/clda/src/Makefile gi/pf/Makefile gi/markov_al/Makefile)
