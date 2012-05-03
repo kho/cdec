@@ -47,4 +47,4 @@ echo "config file: $config"
 echo "using $j workers"
 echo "writing to $grammar"
 
-"$CDEC/sa-extract/escape-testset.pl" | "$CDEC/dpmert/parallelize.pl" -e "$grammar/error" -j "$cpus" --use-fork -- "$CDEC/sa-extract/extractor.py" -c "$config" -x "$grammar/grammar" 2>&1 > /dev/null
+"$CDEC/sa-extract/escape-testset.pl" | "$CDEC/dpmert/parallelize.pl" -e "$grammar/error" -j "$cpus" --use-fork -- /usr/bin/time -v "$CDEC/sa-extract/extractor.py" -c "$config" -x "$grammar/grammar" 2>&1 > /dev/null
