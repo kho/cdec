@@ -2,7 +2,7 @@
 # Extracts grammar from the standard input
 
 usage () {
-    cat <<EOF
+    cat 1>&2 <<EOF
 $0
   -g: grammar output dir
   -c: config file (extract.ini)
@@ -31,19 +31,19 @@ while getopts g:j:c:h o; do
 done
 
 if [ -z "$grammar" ]; then
-    echo "grammar output dir is required."
+    echo "grammar output dir is required." 1>&2
     usage
 fi
 
 if [ -z "$config" ]; then
-    echo "extract.ini is required."
+    echo "extract.ini is required." 1>&2
     usage
 fi
 
 CDEC="$(readlink -f $(dirname $0)/..)"
-echo "using cdec: $CDEC"
-echo "config file: $config"
-echo "using $j workers"
-echo "writing to $grammar"
+echo "using cdec: $CDEC" 1>&2
+echo "config file: $config" 1>&2
+echo "using $cpus workers" 1>&2
+echo "writing to $grammar" 1>&2
 
-"$CDEC/sa-extract/escape-testset.pl" | "$CDEC/dpmert/parallelize.pl" -e "$grammar/error" -j "$cpus" --use-fork -- /usr/bin/time -v "$CDEC/sa-extract/extractor.py" -c "$config" -x "$grammar/grammar" 2>&1 > /dev/null
+"$CDEC/sa-extract/escape-testset.pl" | "$CDEC/dpmert/parallelize.pl" -e "$grammar/error" -j "$cpus" --use-fork -- /usr/bin/time -v "$CDEC/sa-extract/extractor.py" -c "$config" -x "$grammar/grammar" > /dev/null
