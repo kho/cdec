@@ -73,3 +73,5 @@ if [ "$failure_decoding" ]; then
     rm -rf "$GRAMMAR" "$DECERR"
 fi
 echo "Decoding done"
+
+rm -rf "$GRAMMAR" "$DECERR"
