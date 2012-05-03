@@ -1,5 +1,5 @@
 #!/bin/sh
-# Extracts grammar for files from the standard input
+# Extracts grammar from the standard input
 
 usage () {
     cat <<EOF
@@ -29,7 +29,6 @@ while getopts g:j:c:h o; do
 	    usage;;
     esac
 done
-shift $(($OPTIND-1))
 
 if [ -z "$grammar" ]; then
     echo "grammar output dir is required."
