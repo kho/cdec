@@ -18,10 +18,10 @@ for my $f (@fh) {
     $id++;
     # print "<seg id=\"$id\"> $_ </seg>\n";
     if (scalar(@ARGV)>0) {
-      print "<seg id=\"$id\" grammar=\"$ARGV[0].$id.gz\"> $_ </seg>\n";
+      print "<seg id=\"$id\" grammar=\"$ARGV[0].$id\"> $_ </seg>\n";
     } else {
       print "<seg id=\"$id\"> $_ </seg>\n";
-    }    
+    }
   }
 }
 

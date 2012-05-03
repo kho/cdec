@@ -17,12 +17,12 @@ class ContextModel(model.Model):
     self.context_manager = context_manager
     self.id = self.context_manager.add_model(self)
 
-    '''The next feature is true if the model depends in 
-    some way on the entire input sentence; that is, if 
+    '''The next feature is true if the model depends in
+    some way on the entire input sentence; that is, if
     it cannot be scored when created, but must be scored
     no earlier than during the input method (note that
     this is less strict than stateful)'''
-    self.contextual = True 
+    self.contextual = True
     ''' It may seem somewhat counterintuitive that a
     ContextModel can be non-contextual, but a good
     example is the rule probabilites; although these
@@ -46,7 +46,7 @@ class ContextModel(model.Model):
   def compute_contextless_score(self, fphrase, ephrase, paircount, fcount, fsample_count):
     return 0.0
 
-  '''Stateless models should not need to 
+  '''Stateless models should not need to
   override this function, unless they define
   something for model.TO_GOAL'''
   def transition (self,  r, antstates, i, j, j1=None):
@@ -68,7 +68,7 @@ class ContextModel(model.Model):
 
 '''p(e|f)'''
 class EgivenF(ContextModel):
-  
+
   def __init__(self, context_manager, default=0.0):
     ContextModel.__init__(self, context_manager)
     self.contextual = False
@@ -85,6 +85,15 @@ class CountEF(ContextModel):
 
         def compute_contextless_score(self, fphrase, ephrase, paircount, fcount, fsample_count):
                 return math.log10(1.0 + float(paircount))
+
+class CountF(ContextModel):
+
+        def __init__(self, context_manager, default=0.0):
+                ContextModel.__init__(self, context_manager)
+                self.contextual = False
+
+        def compute_contextless_score(self, fphrase, ephrase, paircount, fcount, fsample_count):
+                return -math.log10(float(fcount))
 
 class SampleCountF(ContextModel):
 
@@ -230,5 +239,25 @@ class IsFEGreaterThanZero(ContextModel):
 
         def compute_contextless_score(self, fphrase, ephrase, paircount, fcount, fsample_count):
                 return (paircount > 0.01)
+
+
+class SingleF(ContextModel):
+
+        def __init__(self, context_manager, default=0.0):
+                ContextModel.__init__(self, context_manager)
+                self.contextual = False
+
+        def compute_contextless_score(self, fphrase, ephrase, paircount, fcount, fsample_count):
+                return (fcount==1)
+
+
+class SingleRule(ContextModel):
+
+        def __init__(self, context_manager, default=0.0):
+                ContextModel.__init__(self, context_manager)
+                self.contextual = False
+
+        def compute_contextless_score(self, fphrase, ephrase, paircount, fcount, fsample_count):
+                return (paircount==1)
 
 
