@@ -76,6 +76,6 @@ SEC=`sec $TIME`
 cat<<EOF
 * Overall
 Wall clock time: $TIME = ${SEC}s
-`echo "scale=2;$WORDS/$SEC*600" | bc` words/6min
-`echo "scale=2;$SENTS/$SEC*600" | bc` sents/6min
+`echo "scale=2;$WORDS/$SEC*360" | bc` words/6min
+`echo "scale=2;$SENTS/$SEC*360" | bc` sents/6min
 EOF
