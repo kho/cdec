@@ -13,6 +13,10 @@ EOF
     exit 1
 }
 
+if [ `hostname -d` != 'umiacs.umd.edu' ]; then
+    export PATH=/bolt/mt/code/bin/UMD/python-current/bin:$PATH
+fi
+
 cpus=10				# num of parallel workers
 grammar=""			# where to put grammar output
 config=""			# extract.ini
