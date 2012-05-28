@@ -42,4 +42,4 @@ echo "using $cpus workers" 1>&2
 echo "using grammar: $grammar" 1>&2
 echo "error dir: $error" 1>&2
 
-"$CDEC/bolt-scripts/add-sos-eos.pl" | "$CDEC/sa-extract/escape-testset-add-grammar.pl" "$grammar/grammar" | "$CDEC/dpmert/parallelize.pl" -e "$error" -j "$cpus" --use-fork -m -- /usr/bin/time -v "$CDEC/decoder/cdec" "$@" | "$CDEC/bolt-scripts/remove-sos-eos-sgml.pl"
+"$CDEC/bolt-scripts/declass-ibm.pl" | "$CDEC/bolt-scripts/add-sos-eos.pl" | "$CDEC/sa-extract/escape-testset-add-grammar.pl" "$grammar/grammar" | "$CDEC/dpmert/parallelize.pl" -e "$error" -j "$cpus" --use-fork -m -- /usr/bin/time -v "$CDEC/decoder/cdec" "$@" | "$CDEC/bolt-scripts/remove-sos-eos-sgml.pl"
