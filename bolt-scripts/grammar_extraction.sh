@@ -50,4 +50,4 @@ echo "config file: $config" 1>&2
 echo "using $cpus workers" 1>&2
 echo "writing to $grammar" 1>&2
 
-"$CDEC/bolt-scripts/declass-ibm.pl" | "$CDEC/sa-extract/escape-testset.pl" | "$CDEC/dpmert/parallelize.pl" -e "$grammar/error" -j "$cpus" --use-fork -- /usr/bin/time -v "$CDEC/sa-extract/extractor.py" -c "$config" -x "$grammar/grammar" > /dev/null
+"$CDEC/bolt-scripts/declass-ibm.pl" | "$CDEC/sa-extract/escape-testset.pl" | "$CDEC/dpmert/parallelize.pl" -e "$grammar/error" -j "$cpus" --use-fork -- /usr/bin/time -v python2.7 "$CDEC/sa-extract/extractor.py" -c "$config" -x "$grammar/grammar" > /dev/null
