@@ -3,24 +3,27 @@
 
 usage () {
     cat <<EOF
-$0 -i INPUT -j WORKER_NUM -e LOG_DIR -x EXTRACT.ini -c CDEC.ini -w WEIGHTS
+$0 -i INPUT -j EXTRACT_WORKER_NUM -k DECODER_WORKER_NUM -e LOG_DIR -x EXTRACT.ini -c CDEC.ini -w WEIGHTS
 EOF
     exit 1
 }
 
-cpus=12				# num of parallel workers
+ecpus=12				# num of parallel workers
+dcpus=24                        # num of parallel workers
 error=""			# log directory
 econf=""			# extract.ini
 dconf=""			# cdec.ini
 dweight=""			# weights
 input=""			# input
 
-while getopts j:e:x:c:w:i:h o; do
+while getopts j:k:e:x:c:w:i:h o; do
     case "$o" in
 	h)
 	    usage;;
 	j)
-	    cpus="$OPTARG";;
+	    ecpus="$OPTARG";;
+	k)
+	    dcpus="$OPTARG";;
 	e)
 	    error="$OPTARG";;
 	x)
@@ -51,7 +54,7 @@ SCRIPTS="$(readlink -f $(dirname $0))"
 
 # grammar extraction
 GRAMMAR=`mktemp -d`
-(/usr/bin/time -v "$SCRIPTS/grammar_extraction.sh" -g "$GRAMMAR" -c "$econf" -j "$cpus" < "$input" 2> "$error/extract.log") || failure_extraction=1
+(/usr/bin/time -v "$SCRIPTS/grammar_extraction.sh" -g "$GRAMMAR" -c "$econf" -j "$ecpus" < "$input" 2> "$error/extract.log") || failure_extraction=1
 mkdir -p "$error/extract.ER"
 cp "$GRAMMAR"/error/*.ER "$error/extract.ER/"
 
@@ -64,7 +67,7 @@ echo "Grammar extraction done"
 
 # decoding
 DECERR=`mktemp -d`
-(/usr/bin/time -v "$SCRIPTS/decode.sh" -g "$GRAMMAR" -j "$cpus" -e "$DECERR" -- -c "$dconf" -w "$dweight" -k200 -r < "$input" > "$error/decode.out" 2> "$error/decode.log") || failure_decoding=1
+(/usr/bin/time -v "$SCRIPTS/decode.sh" -g "$GRAMMAR" -j "$dcpus" -e "$DECERR" -- -c "$dconf" -w "$dweight" -k200 -r < "$input" > "$error/decode.out" 2> "$error/decode.log") || failure_decoding=1
 mkdir -p "$error/decode.ER"
 cp "$DECERR"/*.ER "$error/decode.ER"
 
