@@ -14,9 +14,9 @@
 
 using namespace std;
 
-Dwarf::Dwarf(const std::string& param) { 
+Dwarf::Dwarf(const std::string& param) {
 /* Param is a space separated string which contains any or all of the following:
-   oris|orit|doms|domt=filename 
+   oris|orit|doms|domt=filename
    e.g. oris=/fs/clip-galep3eval/hendra/z2e/oris128.gz
 */
   sSOS="<s>";
@@ -33,24 +33,24 @@ Dwarf::Dwarf(const std::string& param) {
   flag_oris=false; flag_orit=false; flag_doms=false; flag_domt=false; flag_tfw_count=false;
   flag_bdoms=false; flag_porislr=false, flag_porisrl=false, flag_goris=false; flag_pgorislr=false, flag_pgorisrl=false;
   flag_pdomslr=false; flag_pdomsrl=false; flag_pgdomslr=false; flag_pgdomsrl=false; flag_gdoms=false;
-  flag_oris_backward=false; flag_orit_backward=false; 
+  flag_oris_backward=false; flag_orit_backward=false;
   explicit_soseos=false;
-  SetStateSize(STATE_SIZE*sizeof(int));   
-  als = new Alignment();  
+  SetStateSize(STATE_SIZE*sizeof(int));
+  als = new Alignment();
   als->clearAls(Alignment::MAX_WORDS,Alignment::MAX_WORDS);
   istringstream iss(param); string w;
   while(iss >> w) {
     int equal = w.find_first_of("=");
     if (equal!=string::npos) {
       string model = w.substr(0,equal);
-      vector<string> params; 
+      vector<string> params;
       Tokenize(w.substr(equal+1),',',&params);
       string fn = params[0];
       if (model == "minfreq") {
         cerr << "model minfreq " << fn << endl;
         als->setFreqCutoff(atoi(fn.c_str()));
       } else if (model == "oris") {
-        flag_oris = readOrientation(&toris,fn,&sfw); 
+        flag_oris = readOrientation(&toris,fn,&sfw);
         if (flag_oris) {
           oris_ = FD::Convert("OrientationSource");
           //oris_bo1_ = FD::Convert("OrientationSource_BO1");
@@ -81,7 +81,7 @@ Dwarf::Dwarf(const std::string& param) {
         }
         if (params.size()>1) {
           readTags(params[1],&tags);
-          generalizeOrientation(&tgoris,tags);          
+          generalizeOrientation(&tgoris,tags);
         }
       } else if (model=="pgorislr") {
         flag_pgorislr = readOrientation(&tpgorislr,fn,&sfw,true);
@@ -107,7 +107,7 @@ Dwarf::Dwarf(const std::string& param) {
         pgoris_nrl = 0;
         if (flag_pgorisrl) {
           pgorisrl_ = FD::Convert("OrientationSourceGeneralizedPositionfulLeftRight");
-        } 
+        }
         if (params.size()>1) pgoris_nrl = atoi(params[1].c_str());
         if (params.size()>2) {
           readTags(params[2],&tags);
@@ -120,7 +120,7 @@ Dwarf::Dwarf(const std::string& param) {
         if (params.size()>1) als->setAlphaOris(atof(params[1].c_str()));
         if (params.size()>2) als->setBetaOris(atof(params[2].c_str()));
       } else if (model == "orit") {
-        flag_orit = readOrientation(&torit,fn,&tfw); 
+        flag_orit = readOrientation(&torit,fn,&tfw);
         if (flag_orit) {
           orit_ = FD::Convert("OrientationTarget");
           //orit_bo1_ = FD::Convert("OrientationTarget_BO1");
@@ -135,7 +135,7 @@ Dwarf::Dwarf(const std::string& param) {
         if (params.size()>1) als->setAlphaOrit(atof(params[1].c_str()));
         if (params.size()>2) als->setBetaOrit(atof(params[2].c_str()));
       } else if (model == "doms") {
-        flag_doms = readDominance(&tdoms,fn,&sfw); 
+        flag_doms = readDominance(&tdoms,fn,&sfw);
         if (flag_doms) {
           doms_ = FD::Convert("DominanceSource");
           //doms_bo1_ = FD::Convert("DominanceSource_BO1");
@@ -151,7 +151,6 @@ Dwarf::Dwarf(const std::string& param) {
         if (params.size()>1) pdoms_nrl = atoi(params[1].c_str());
       } else if (model == "pdomslr") {
         flag_pdomslr = readDominance(&tpdomslr,fn,&sfw,true);
-        tpdomslr.print();
         if (flag_pdomslr) {
           pdomslr_ = FD::Convert("DominanceSourcePositionfulLeftRight");
         }
@@ -178,7 +177,7 @@ Dwarf::Dwarf(const std::string& param) {
             for (map<WordID,WordID>::const_iterator it=tags.begin(); it!=tags.end(); it++) {
               cerr << "tags = " << TD::Convert(it->first) << ", " << TD::Convert(it->second) << endl;
             }
-          } 
+          }
           generalizeDominance(&tpgdomslr,tags,true);
         }
         if (DEBUG) tpgdomslr.print();
@@ -188,7 +187,7 @@ Dwarf::Dwarf(const std::string& param) {
           bdoms_ = FD::Convert("BorderDominanceSource");
         }
       } else if (model == "domt") {
-        flag_domt = readDominance(&tdomt,fn,&tfw); 
+        flag_domt = readDominance(&tdomt,fn,&tfw);
         if (flag_domt) {
           domt_ = FD::Convert("DominanceTarget");
           //domt_bo1_ = FD::Convert("DominanceTarget_BO1");
@@ -198,7 +197,7 @@ Dwarf::Dwarf(const std::string& param) {
         if (params.size()>2) als->setBetaDomt(atof(params[2].c_str()));
       } else if (model== "tfw_count") {
         flag_tfw_count = readList(fn,&tfw);
-        tfw_count_ = FD::Convert("TargetFunctionWordsCount");        
+        tfw_count_ = FD::Convert("TargetFunctionWordsCount");
       } else {
         cerr << "DWARF doesn't understand this model: " << model << endl;
       }
@@ -208,16 +207,16 @@ Dwarf::Dwarf(const std::string& param) {
         tfw_count_ = FD::Convert("TargetFunctionWordsCount");
       } else if (w=="oris_backward") {
         flag_oris_backward = true;
-        oris_backward_ = FD::Convert("OrientationSourceBackward"); 
+        oris_backward_ = FD::Convert("OrientationSourceBackward");
       } else if (w=="orit_backward") {
         flag_orit_backward = true;
         orit_backward_ = FD::Convert("OrientationTargetBackward");
       } else if (w=="explicit_soseos") {
         explicit_soseos=true;
       } else {
-        cerr << "DWARF doesn't need this param: " << param << endl; 
+        cerr << "DWARF doesn't need this param: " << param << endl;
       }
-    }  
+    }
   }
   for (map<WordID,int>::const_iterator it=sfw.begin(); it!=sfw.end() && DEBUG; it++) {
     cerr << "   FW:" << TD::Convert(it->first) << endl;
@@ -235,7 +234,7 @@ void Dwarf::TraversalFeaturesImpl(const SentenceMetadata& smeta,
   double bdoms_state_mono= 0; double bdoms_state_nonmono = 0;
   TRule r = *edge.rule_;
   if (DEBUG) cerr << " sent_id=" << *_sent_id << ", " << smeta.GetSentenceID() << endl;
-  if (DEBUG) cerr << "rule = " << r.AsString() << endl; 
+  if (DEBUG) cerr << "rule = " << r.AsString() << endl;
   if (DEBUG) cerr << "rule[i,j] = " << edge.i_ << "," << edge.j_ << endl;
   if (*_sent_id != smeta.GetSentenceID()) { //new sentence
     *_sent_id = smeta.GetSentenceID();
@@ -248,7 +247,7 @@ void Dwarf::TraversalFeaturesImpl(const SentenceMetadata& smeta,
     }
     if (DEBUG) cerr << "new sentence[" << *_sent_id << "]="<<*_fwcount<<endl;
   }
-  bool nofw = als->prepare(*edge.rule_, ant_contexts, sfw, tfw,smeta.GetSourceLattice(),edge.i_,edge.j_); 
+  bool nofw = als->prepare(*edge.rule_, ant_contexts, sfw, tfw,smeta.GetSourceLattice(),edge.i_,edge.j_);
   bool isFinal = (edge.i_==0 && edge.j_==smeta.GetSourceLength() && r.GetLHS()==kGOAL);
   // prepare *nofw* outputs whether the resulting alignment, contains function words or not
   // if not, the models do not have to be calcualted and *simplify* is very simple
@@ -258,25 +257,25 @@ void Dwarf::TraversalFeaturesImpl(const SentenceMetadata& smeta,
     for (int i=0; i<r.e_.size(); i++) {
       if (tfw.find(r.e_[i])!=tfw.end()) count++;
     }
-    features->set_value(tfw_count_,count);  
+    features->set_value(tfw_count_,count);
   }
   if (flag_oris) {
     cost=0; bonus=0; bo1=0; bo2=0; bo1_bonus=0; bo2_bonus=0;
-    if (!nofw) als->computeOrientationSource(toris,&cost,&bonus,&bo1,&bo1_bonus,&bo2,&bo2_bonus); 
+    if (!nofw) als->computeOrientationSource(toris,&cost,&bonus,&bo1,&bo1_bonus,&bo2,&bo2_bonus);
     if (isFinal&&!explicit_soseos) {
       cost += bonus;
       bonus = 0;
     }
-    features->set_value(oris_,cost); 
-    //features->set_value(oris_bo1_,bo1); 
+    features->set_value(oris_,cost);
+    //features->set_value(oris_bo1_,bo1);
     //features->set_value(oris_bo2_,bo2);
-    estimated_features->set_value(oris_,bonus); 
-    //estimated_features->set_value(oris_bo1_,bo1_bonus); 
+    estimated_features->set_value(oris_,bonus);
+    //estimated_features->set_value(oris_bo1_,bo1_bonus);
     //estimated_features->set_value(oris_bo2_,bo2_bonus);
   }
   if (flag_porislr) {
     cost=0; bonus=0; bo1=0; bo2=0; bo1_bonus=0; bo2_bonus=0;
-    if (!nofw) 
+    if (!nofw)
       als->computeOrientationSourcePos(tporislr,&cost,&bonus,&bo1,&bo1_bonus,&bo2,&bo2_bonus,*_fwcount,poris_nlr,0);
     if (isFinal&&!explicit_soseos) {
       cost += bonus;
@@ -330,7 +329,7 @@ void Dwarf::TraversalFeaturesImpl(const SentenceMetadata& smeta,
   }
   if (flag_oris_backward) {
     cost=0; bonus=0;
-    if (!nofw) 
+    if (!nofw)
       als->computeOrientationSourceBackward(toris,&cost,&bonus,&bo1,&bo1_bonus,&bo2,&bo2_bonus);
     if (isFinal&&!explicit_soseos) {
       cost += bonus;
@@ -340,7 +339,7 @@ void Dwarf::TraversalFeaturesImpl(const SentenceMetadata& smeta,
     estimated_features->set_value(oris_backward_,bonus);
   }
   WordID _lfw = kSOS;
-  WordID _rfw = kEOS; 
+  WordID _rfw = kEOS;
   if (flag_doms || flag_pdomslr || flag_pdomsrl || flag_pgdomslr || flag_pgdomsrl) {
     if (DEBUG) cerr << "   seeking lfw and rfw" << endl;
     int start = edge.i_;
@@ -368,14 +367,14 @@ void Dwarf::TraversalFeaturesImpl(const SentenceMetadata& smeta,
   if (flag_doms) {
     cost=0; bonus=0; bo1=0; bo2=0; bo1_bonus=0; bo2_bonus=0;
     if (!nofw) als->computeDominanceSource(tdoms,_lfw,_rfw,&cost,&bonus,
-                                           &bo1,&bo1_bonus,&bo2,&bo2_bonus); 
+                                           &bo1,&bo1_bonus,&bo2,&bo2_bonus);
     if (DEBUG) cerr << "   COST=" << cost << ", BONUS=" << bonus << endl;
     if (isFinal&&!explicit_soseos) {
       cost += bonus;
       if (DEBUG) cerr << "    final and !explicit_soseos, thus cost = " << cost <<  endl;
       bonus = 0;
     }
-    features->set_value(doms_,cost); 
+    features->set_value(doms_,cost);
     estimated_features->set_value(doms_,bonus);
   }
   if (flag_pdomslr) {
@@ -390,7 +389,7 @@ void Dwarf::TraversalFeaturesImpl(const SentenceMetadata& smeta,
       bonus = 0;
     }
     features->set_value(pdomslr_,cost);
-    estimated_features->set_value(pdomslr_,bonus);  
+    estimated_features->set_value(pdomslr_,bonus);
   }
   if (flag_pdomsrl) {
     cost=0; bonus=0; bo1=0; bo2=0; bo1_bonus=0; bo2_bonus=0;
@@ -401,7 +400,7 @@ void Dwarf::TraversalFeaturesImpl(const SentenceMetadata& smeta,
       bonus = 0;
     }
     features->set_value(pdomsrl_,cost);
-    estimated_features->set_value(pdomsrl_,bonus); 
+    estimated_features->set_value(pdomsrl_,bonus);
   }
   if (flag_pgdomslr) {
     cost=0; bonus=0; bo1=0; bo2=0; bo1_bonus=0; bo2_bonus=0;
@@ -412,7 +411,7 @@ void Dwarf::TraversalFeaturesImpl(const SentenceMetadata& smeta,
       bonus = 0;
     }
     features->set_value(pgdomslr_,cost);
-    estimated_features->set_value(pgdomslr_,bonus);  
+    estimated_features->set_value(pgdomslr_,bonus);
   }
   if (flag_pgdomsrl) {    cost=0; bonus=0; bo1=0; bo2=0; bo1_bonus=0; bo2_bonus=0;
     if (!nofw) als->computeDominanceSourcePos(tpgdomsrl,_lfw,_rfw,&cost,&bonus,
@@ -422,24 +421,24 @@ void Dwarf::TraversalFeaturesImpl(const SentenceMetadata& smeta,
       bonus = 0;
     }
     features->set_value(pgdomsrl_,cost);
-    estimated_features->set_value(pgdomsrl_,bonus); 
+    estimated_features->set_value(pgdomsrl_,bonus);
   }
 
 
   if (flag_bdoms) {
-    cost=0; bonus=0; bdoms_state_mono=0; bdoms_state_nonmono=0; 
+    cost=0; bonus=0; bdoms_state_mono=0; bdoms_state_nonmono=0;
     if (!nofw)
       als->computeBorderDominanceSource(tbdoms,&cost,&bonus,
         &bdoms_state_mono, &bdoms_state_nonmono,*edge.rule_, ant_contexts, sfw);
     features->set_value(bdoms_,cost);
-    estimated_features->set_value(bdoms_,bonus); 
+    estimated_features->set_value(bdoms_,bonus);
   }
   if (flag_orit) {
     cost=0; bonus=0; bo1=0; bo2=0; bo1_bonus=0; bo2_bonus=0;
-    if (!nofw) als->computeOrientationTarget(torit,&cost,&bonus,&bo1,&bo1_bonus,&bo2,&bo2_bonus); 
+    if (!nofw) als->computeOrientationTarget(torit,&cost,&bonus,&bo1,&bo1_bonus,&bo2,&bo2_bonus);
     if (DEBUG) cerr << "cost=" << cost << ", bonus=" << bonus << ", bo1=" << bo1 << ", bo1_bonus=" << bo1_bonus << ", bo2=" << bo2 << ", bo2_bonus=" << bo2_bonus << endl;
-    features->set_value(orit_,cost); 
-    //features->set_value(orit_bo1_,bo1); 
+    features->set_value(orit_,cost);
+    //features->set_value(orit_bo1_,bo1);
     //features->set_value(orit_bo2_,bo2);
     estimated_features->set_value(orit_,bonus);
     //estimated_features->set_value(orit_bo1_,bo1_bonus);
@@ -473,8 +472,8 @@ void Dwarf::TraversalFeaturesImpl(const SentenceMetadata& smeta,
     //neighboringFWs(smeta.GetReference(),edge.i_,edge.j_,tfw,&_lfw,&_rfw);
     if (!nofw) als->computeDominanceTarget(tdomt,_lfw,_rfw,&cost,&bonus,
                                            &bo1,&bo1_bonus,&bo2,&bo2_bonus);
-    features->set_value(domt_,cost); 
-    //features->set_value(domt_bo1_,bo1); 
+    features->set_value(domt_,cost);
+    //features->set_value(domt_bo1_,bo1);
     //features->set_value(domt_bo2_,bo2);
     estimated_features->set_value(domt_,bonus);
     //estimated_features->set_value(domt_bo1_,bo1_bonus);
@@ -484,13 +483,13 @@ void Dwarf::TraversalFeaturesImpl(const SentenceMetadata& smeta,
   if (!nofw) {
     als->BorderingSFWsOnly();
     als->BorderingTFWsOnly();
-    als->simplify(vcontext);  
+    als->simplify(vcontext);
   } else {
     als->simplify_nofw(vcontext);
   }
   vcontext[50] = DoubleToInteger(bdoms_state_mono);
   vcontext[51] = DoubleToInteger(bdoms_state_nonmono);
-  vcontext[STATE_SIZE-1] = Alignment::link(edge.i_,edge.j_); 
+  vcontext[STATE_SIZE-1] = Alignment::link(edge.i_,edge.j_);
   if (DEBUG) {
     cerr << "state@traverse = ";
     for (int idx=0; idx<STATE_SIZE; idx++) cerr << idx << "." << vcontext[idx] << " ";
@@ -504,7 +503,7 @@ int Dwarf::DoubleToInteger(double val) {
   float x = (float)val;
   float* px = &x;
   int* pix = reinterpret_cast<int *>(px);
-  return *pix; 
+  return *pix;
 }
 
 double Dwarf::IntegerToDouble(int val) {
@@ -517,16 +516,16 @@ void Dwarf::neighboringFWs(const Lattice& l, const int& i, const int& j, const m
   *lfw=0; *rfw=0;
   int idx=i-l[i][0].dist2next;
   while (idx>=0) {
-    if (l[idx].size()>0) { 
+    if (l[idx].size()>0) {
       if (fw_hash.find(l[idx][0].label)!=fw_hash.end()) {
-        *lfw++;  
+        *lfw++;
       }
     }
     idx-=l[idx][0].dist2next;
   }
   idx=j+l[j][0].dist2next;
   while (idx<l.size()) {
-    if (l[idx].size()>0) { 
+    if (l[idx].size()>0) {
       if (fw_hash.find(l[idx][0].label)!=fw_hash.end()) {
         *rfw++;
       }
@@ -541,11 +540,11 @@ bool Dwarf::readOrientation(CountTable* table, const std::string& filename, std:
   // 0 -> MA, 1 -> RA, 2 -> MG, 3 -> RG, 4 -> NO_NEIGHBOR
   // first 01234 corresponds to the left neighbor, the second 01234 corresponds to the right neighbor
   // append 2 more at the end as precomputed total
-  
-  // TONS of hack here. CountTable should be wrapped as a class  
+
+  // TONS of hack here. CountTable should be wrapped as a class
   // TODO: check whether the file exists or not, return false if not
   if (DEBUG) cerr << "  readOrientation(" << filename << ", pos=" << pos << ")" << endl;
-  ReadFile rf(filename);  
+  ReadFile rf(filename);
   istream& in = *rf.stream();
   table->setup(24,pos);
   table->ultimate = new int[24];
@@ -557,7 +556,7 @@ bool Dwarf::readOrientation(CountTable* table, const std::string& filename, std:
     if (line=="") break;
     istringstream tokenizer(line);
     string sourceidx, source, target, word;
-    tokenizer >> source >> target; 
+    tokenizer >> source >> target;
     if (pos) {
       sourceidx = source;
       source = sourceidx.substr(0,sourceidx.find_last_of("/"));
@@ -594,18 +593,18 @@ bool Dwarf::readOrientation(CountTable* table, const std::string& filename, std:
     oss << source << " " << target;
     WordID key_id = TD::Convert(oss.str());
     oss.str("");
-    if (table->model.find(key_id)!=table->model.end()) {  
+    if (table->model.find(key_id)!=table->model.end()) {
       for (int i=0; i<24; i++) table->model[key_id][i]+=element[i];
     } else {
       int* el2 = new int[24];
       for (int i=0; i<24; i++) el2[i] = element[i];
       table->model.insert(pair<WordID,int*>(key_id,el2));
     }
-    
+
     oss << source;
     key_id = TD::Convert(oss.str());
     oss.str("");
-    if (table->model.find(key_id)!=table->model.end()) {    
+    if (table->model.find(key_id)!=table->model.end()) {
       for (int i=0; i<24; i++) table->model[key_id][i]+=element[i];
     } else {
       int* el2 = new int[24];
@@ -616,7 +615,7 @@ bool Dwarf::readOrientation(CountTable* table, const std::string& filename, std:
     if (pos) {
       oss << sourceidx << " " << target;
       key_id = TD::Convert(oss.str());
-      oss.str(""); 
+      oss.str("");
       if (table->model.find(key_id)!=table->model.end()) {
         for (int i=0; i<24; i++) table->model[key_id][i]+=element[i];
       } else {
@@ -626,8 +625,8 @@ bool Dwarf::readOrientation(CountTable* table, const std::string& filename, std:
       }
     }
     delete[] element;
-  }  
-  return true;    
+  }
+  return true;
 }
 
 bool Dwarf::readList(const std::string& filename, std::map<WordID,int>* fw) {
@@ -636,15 +635,15 @@ bool Dwarf::readList(const std::string& filename, std::map<WordID,int>* fw) {
   while (in) {
     string word;
     getline(in,word);
-    if (fw->find(TD::Convert(word))==fw->end()) fw->insert(pair<WordID,int>(TD::Convert(word),1)); 
+    if (fw->find(TD::Convert(word))==fw->end()) fw->insert(pair<WordID,int>(TD::Convert(word),1));
   }
   return true;
 }
 
 bool Dwarf::readDominance(CountTable* table, const std::string& filename, std::map<WordID,int>* fw, bool pos) {
-  // the input format is 
+  // the input format is
   // source1 source2 target1 target2 0 1 2 3
-  // 0 -> dontcase 1->leftfirst 2->rightfirst 3->neither 
+  // 0 -> dontcase 1->leftfirst 2->rightfirst 3->neither
   if (DEBUG) cerr << "readDominance(" << filename << ",pos="<< pos << ")" << endl;
   ReadFile rf(filename);
   istream& in = *rf.stream();
@@ -656,10 +655,10 @@ bool Dwarf::readDominance(CountTable* table, const std::string& filename, std::m
     getline(in,line);
     if (line=="") break;
     string source1idx, source2idx, target1, target2, source1, source2;
-    ostringstream oss; 
+    ostringstream oss;
     WordID key_id;
     istringstream tokenizer(line);
-    tokenizer >> source1 >> source2 >> target1 >> target2; 
+    tokenizer >> source1 >> source2 >> target1 >> target2;
     if (pos) {
       source1idx = source1;
       source2idx = source2;
@@ -681,10 +680,10 @@ bool Dwarf::readDominance(CountTable* table, const std::string& filename, std::m
     oss << source1 << " " << source2 << " " << target1 << " " << target2;
     key_id = TD::Convert(oss.str());
     oss.str("");
-    if (table->model.find(key_id)!=table->model.end()) { 
+    if (table->model.find(key_id)!=table->model.end()) {
       for (int i=0; i<5; i++) table->model[key_id][i]+=element[i];
     } else {
-      int* el2 = new int[5]; 
+      int* el2 = new int[5];
       for (int i=0; i<5; i++) el2[i]=element[i];
       table->model.insert(pair<WordID,int*>(key_id,el2));
     }
@@ -692,10 +691,10 @@ bool Dwarf::readDominance(CountTable* table, const std::string& filename, std::m
     oss << source1 << " " << source2;
     key_id = TD::Convert(oss.str());
     oss.str("");
-    if (table->model.find(key_id)!=table->model.end()) {  
+    if (table->model.find(key_id)!=table->model.end()) {
       for (int i=0; i<5; i++) table->model[key_id][i]+=element[i];
     } else {
-      int* el2 = new int[5]; 
+      int* el2 = new int[5];
       for (int i=0; i<5; i++) el2[i]=element[i];
       table->model.insert(pair<WordID,int*>(key_id,el2));
     }
@@ -704,10 +703,10 @@ bool Dwarf::readDominance(CountTable* table, const std::string& filename, std::m
       oss << source1idx << " " << source2idx << " " << target1 << " " << target2;
       key_id = TD::Convert(oss.str());
       oss.str("");
-      if (table->model.find(key_id)!=table->model.end()) {  
+      if (table->model.find(key_id)!=table->model.end()) {
         for (int i=0; i<5; i++) table->model[key_id][i]+=element[i];
       } else {
-        int* el2 = new int[5]; 
+        int* el2 = new int[5];
         for (int i=0; i<5; i++) el2[i]=element[i];
         table->model.insert(pair<WordID,int*>(key_id,el2));
       }
@@ -715,7 +714,7 @@ bool Dwarf::readDominance(CountTable* table, const std::string& filename, std::m
     delete element;
   }
 
-  return true;    
+  return true;
 }
 
 bool Dwarf::readTags(const std::string& filename, std::map<WordID,WordID>* tags) {
@@ -741,7 +740,7 @@ bool Dwarf::generalizeOrientation(CountTable* table, const std::map<WordID,WordI
     string idx = "";
     if (pos) {
       int found = source.find_last_of("/");
-      if (found!=string::npos && found>0) { 
+      if (found!=string::npos && found>0) {
         idx = source.substr(found+1);
         source = source.substr(0,found);
       }
@@ -789,7 +788,7 @@ bool Dwarf::generalizeOrientation(CountTable* table, const std::map<WordID,WordI
   }
 
 }
- 
+
 
 
 bool Dwarf::generalizeDominance(CountTable* table, const std::map<WordID,WordID>& tags, bool pos) {
@@ -811,11 +810,11 @@ bool Dwarf::generalizeDominance(CountTable* table, const std::map<WordID,WordID>
         source2 = source2.substr(0,found2);
       }
     }
-    if (DEBUG) 
+    if (DEBUG)
       cerr << "[U]source1='" << source1 << "', idx1='"<< idx1 << "', source2='" << source2 << "', idx2='"<< idx2 << "', target1='" << target1 << "', target2='" << target2 << "'" << endl;
     map<WordID,WordID>::const_iterator tags_iter1 = tags.find(TD::Convert(source1));
     map<WordID,WordID>::const_iterator tags_iter2 = tags.find(TD::Convert(source2));
-    if (tags_iter1!=tags.end()) 
+    if (tags_iter1!=tags.end())
       source1 = TD::Convert(tags_iter1->second);
     oss << source1;
     if (idx1!="") oss << "/" << idx1;
@@ -824,8 +823,8 @@ bool Dwarf::generalizeDominance(CountTable* table, const std::map<WordID,WordID>
     oss << " " << source2;
     if (idx2!="") oss << "/" << idx2;
     if (target1!="" && target2!="") oss << " " << target1 << " " << target2;
-    
-    if (DEBUG) cerr << "generalized key = '" << oss.str() << "'" << endl; 
+
+    if (DEBUG) cerr << "generalized key = '" << oss.str() << "'" << endl;
     if (generalized.find(oss.str())!=generalized.end()) {
       int* model = generalized[oss.str()];
       for (int i=0; i<5; i++) model[i] += it->second[i];
@@ -833,10 +832,10 @@ bool Dwarf::generalizeDominance(CountTable* table, const std::map<WordID,WordID>
       int* model = new int[5];
       for (int i=0; i<5; i++) model[i] = it->second[i];
       generalized.insert(pair<string,int*>(oss.str(),model));
-    }    
+    }
     oss.str("");
   }
-  
+
   if (DEBUG) {
     for (map<string,int*>::const_iterator it=generalized.begin(); it!=generalized.end(); it++) {
       cerr << "GENERALIZED = " << it->first << ", ";
@@ -871,22 +870,22 @@ bool Dwarf::generalizeDominance(CountTable* table, const std::map<WordID,WordID>
     oss << " " << source2;
     if (idx2!="") oss << "/" << idx2;
     if (target1!="" && target2!="") oss << " " << target1 << " " << target2;
-    
+
     if (generalized.find(oss.str())!=generalized.end()) {
-      if (DEBUG) cerr << " generalizing "<< TD::Convert(it->first) << " into " << oss.str() << endl; 
+      if (DEBUG) cerr << " generalizing "<< TD::Convert(it->first) << " into " << oss.str() << endl;
       if (DEBUG) {
         cerr << "  model from ";
-        for (int i=0; i<5; i++) cerr << it->second[i] << " "; 
+        for (int i=0; i<5; i++) cerr << it->second[i] << " ";
         cerr << endl;
       }
       delete it->second;
       it->second = generalized[oss.str()];
       if (DEBUG) {
         cerr << "  into ";
-        for (int i=0; i<5; i++) cerr << it->second[i] << " "; 
+        for (int i=0; i<5; i++) cerr << it->second[i] << " ";
         cerr << endl;
       }
-    }    
+    }
     oss.str("");
   }
 
