@@ -6,11 +6,11 @@ my $SCRIPT_DIR; BEGIN { use Cwd qw/ abs_path /; use File::Basename; $SCRIPT_DIR 
 push @INC, $SCRIPT_DIR, "$SCRIPT_DIR/../environment"; }
 
 # Skip local config (used for distributing jobs) if we're running in local-only mode
-#use LocalConfig;
+use LocalConfig;
 use Getopt::Long;
 use IPC::Open2;
 use POSIX ":sys_wait_h";
-#my $QSUB_CMD = qsub_args(mert_memory());
+my $QSUB_CMD = qsub_args(mert_memory());
 
 require "libcall.pl";
 
