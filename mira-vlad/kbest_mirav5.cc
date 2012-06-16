@@ -1105,7 +1105,7 @@ int main(int argc, char** argv) {
     SparseVector<double> x = tot;
     x /= lcount;
     ostringstream sa;
-    string msga = "# MIRA tuned weights AVERAGED";
+    string msga = "# MIRA tuned weights AVERAGED ||| " + boost::lexical_cast<std::string>(node_id) + " ||| " + boost::lexical_cast<std::string>(lcount);
     sa << weights_dir << "/weights.mira-pass" << (cur_pass < 10 ? "0" : "") << cur_pass << "." << node_id << "-avg.gz";
     //Weights ww;
     //ww.InitFromVector(x);
