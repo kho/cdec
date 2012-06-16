@@ -6,11 +6,11 @@ my $SCRIPT_DIR; BEGIN { use Cwd qw/ abs_path /; use File::Basename; $SCRIPT_DIR 
 push @INC, $SCRIPT_DIR, "$SCRIPT_DIR/../environment"; }
 
 # Skip local config (used for distributing jobs) if we're running in local-only mode
-#use LocalConfig;
+use LocalConfig;
 use Getopt::Long;
 use IPC::Open2;
 use POSIX ":sys_wait_h";
-#my $QSUB_CMD = qsub_args(mert_memory());
+my $QSUB_CMD = qsub_args(mert_memory());
 
 require "libcall.pl";
 
@@ -43,14 +43,16 @@ my $run_local = 0;
 my $usefork;
 my $pass_suffix = '';
 
-my $cdec = "$bin_dir/kbest_mirav5";
+my $cdec ="$bin_dir/kbest_mirav5"; #"$bin_dir/kbest_mira_rmmv2"; #"$bin_dir/kbest_mira_lv";
+
+#my $cdec ="$bin_dir/kbest_mira_rmmv2"; #"$bin_dir/kbest_mirav5"; #"$bin_dir/kbest_mira_rmmv2"; #"$bin_dir/kbest_mira_lv";
 die "Can't find decoder in $cdec" unless -x $cdec;
 my $decoder = $cdec;
 my $decoderOpt;
 my $update_size=250;
 my $approx_score;
 my $kbest_size=250;
-my $metric_scale=10000;
+my $metric_scale=1;
 my $optimizer=3;
 my $disable_clean = 0;
 my $use_make;  # use make to parallelize line search
@@ -58,8 +60,14 @@ my $density_prune;
 my $cpbin=1;
 my $help = 0;
 my $epsilon = 0.0001;
+my $step_size = 0.01;
 my $gpref;
 my $unique_kbest;
+my $freeze;
+my $latent;
+my $sample_max;
+my $hopes=1;
+my $fears=1;
 
 # Process command-line options
 Getopt::Long::Configure("no_auto_abbrev");
@@ -83,12 +91,18 @@ if (GetOptions(
         "source-file=s" => \$srcFile,
         "weights=s" => \$initialWeights,
 	"optimizer=i" => \$optimizer,
-	"metric-scale" => \$metric_scale,
+	"metric-scale=i" => \$metric_scale,
 	"kbest-size=i" => \$kbest_size,
 	"update-size=i" => \$update_size,
+	"step-size=f" => \$step_size,
+	"hope-select=i" => \$hopes,
+	"fear-select=i" => \$fears,
 	"approx-score" => \$approx_score,
 	"unique-kbest" => \$unique_kbest,
+	"latent" => \$latent,
+	"sample-max=i" => \$sample_max,
         "grammar-prefix=s" => \$gpref,
+	"freeze" => \$freeze,
         "workdir=s" => \$dir,
 	) == 0 || @ARGV!=1 || $help) {
         print_help();
@@ -240,9 +254,15 @@ for (my $opt_iter=0; $opt_iter<$max_iterations; $opt_iter++) {
 	my $weightsFile="$dir/weights.$opt_iter";
 	print "ITER $iteration " ;
 	my $cur_pass = "-p 0$opt_iter";
-	my $decoder_cmd = "$decoder -c $iniFile -w $weightsFile $refs_comma_sep -s $metric_scale -a -b $update_size -k $kbest_size -o $optimizer $cur_pass -O $weightdir -D $dir";
+	my $decoder_cmd = "$decoder -c $iniFile -w $weightsFile $refs_comma_sep -m $metric -s $metric_scale -a -b $update_size -k $kbest_size -o $optimizer $cur_pass -O $weightdir -D $dir -h $hopes -f $fears -C $step_size";
 	if($unique_kbest){
 		$decoder_cmd .= " -u";
+	}
+	if($latent){
+		$decoder_cmd .= " -l";
+	}
+	if($sample_max){
+		$decoder_cmd .= " -t $sample_max";
 	}
 	if ($density_prune) {
 		$decoder_cmd .= " --density_prune $density_prune";
@@ -257,7 +277,7 @@ for (my $opt_iter=0; $opt_iter<$max_iterations; $opt_iter++) {
 	    $pcmd = "cat $srcFile | $local_server $usefork -p $pmem -e $logdir -n $decode_nodes --";
 	}
 	else {
-	    $pcmd = "cat $srcFile | $parallelize $usefork -p $pmem -e $logdir -j $decode_nodes --";
+	    $pcmd = "cat $srcFile | $parallelize $usefork -p $pmem -e $logdir -j $decode_nodes --baseport 12000 --";
 	}
 	my $cmd = "$pcmd $decoder_cmd 2> $decoderLog 1> $runFile";
 	print STDERR "COMMAND:\n$cmd\n";
@@ -303,7 +323,7 @@ for (my $opt_iter=0; $opt_iter<$max_iterations; $opt_iter++) {
 	# save space
 	check_call("gzip -f $runFile");
 	check_call("gzip -f $decoderLog");
-	my $iter_filler="";
+		my $iter_filler="";
 	if($opt_iter < 10)
 	{$iter_filler="0";}
 
@@ -317,10 +337,15 @@ for (my $opt_iter=0; $opt_iter<$max_iterations; $opt_iter++) {
 #		print STDERR "\nREACHED STOPPING CRITERION: score change too little\n";
 #		last;
 #	}
+	system("gzip -f $logdir/kbes*");
 	print STDERR "\n==========\n";
 	$iteration++;
 }
-
+#find 
+#my $cmd = `grep SCORE /fs/clip-galep5/lexical_tm/log.runmira.nist.20 | cat -n | sort -k +2 | tail -1`;
+#$cmd =~ m/([0-9]+)/;
+#$lastWeightsFile = "$dir/weights.$1";
+#check_call("ln -s $lastWeightsFile $dir/weights.tuned");
 print STDERR "\nFINAL WEIGHTS: $lastWeightsFile\n(Use -w <this file> with the decoder)\n\n";
 
 print STDOUT "$lastWeightsFile\n";
@@ -430,8 +455,9 @@ sub enseg {
     close NEWSRC;
 }
 
-#sub print_help {
-
+sub print_help {
+	print "Something wrong\n";
+}
 
 sub cmdline {
     return join ' ',($0,@ORIG_ARGV);
@@ -472,6 +498,7 @@ sub average_weights {
     my %feature_weights= ();
     my $total =0;
     my $total_mult =0;
+    sleep(10);
     foreach my $file (glob "$path")
     {
 	$file =~ /\/([^\/]+).gz$/;
@@ -485,7 +512,7 @@ sub average_weights {
 	$total++;
 	while( <SCORE> ) {
 	    my $line = $_;
-	    if ($line !~ m/\#/)
+	    if ($line !~ m/^\#/)
 	    {
 		my @s = split(" ",$line);
 		$feature_weights{$s[0]}+= $mult * $s[1];
@@ -499,13 +526,15 @@ sub average_weights {
 	$total_mult += $mult;
 	
 	close SCORE;
-	
+	$cmd = "gzip $file"; check_bash_call($cmd);
     }
     
 #print out new averaged weights
     open OUT, "> $out" or next;
     for my $f ( keys %feature_weights ) {
+	print "$f $feature_weights{$f} $total_mult\n";
 	my $ave = $feature_weights{$f} / $total_mult;
+	
 	print "Printing $f $ave ||| ";
 	print OUT "$f $ave\n";
     }
