@@ -69,6 +69,11 @@ my $sample_max;
 my $hopes=1;
 my $fears=1;
 
+my $range = 35000;
+my $minimum = 15000;
+my $portn = int(rand($range)) + $minimum;
+
+
 # Process command-line options
 Getopt::Long::Configure("no_auto_abbrev");
 if (GetOptions(
@@ -236,6 +241,7 @@ my $lastWeightsFile;
 for (my $opt_iter=0; $opt_iter<$max_iterations; $opt_iter++) {
 
 	print STDERR "\n\nITERATION $opt_iter\n==========\n";
+	print STDERR "Using port $portn\n";
 
 	# iteration-specific files
 	my $runFile="$dir/run.raw.$opt_iter";
@@ -277,7 +283,7 @@ for (my $opt_iter=0; $opt_iter<$max_iterations; $opt_iter++) {
 	    $pcmd = "cat $srcFile | $local_server $usefork -p $pmem -e $logdir -n $decode_nodes --";
 	}
 	else {
-	    $pcmd = "cat $srcFile | $parallelize $usefork -p $pmem -e $logdir -j $decode_nodes --baseport 12000 --";
+	    $pcmd = "cat $srcFile | $parallelize $usefork -p $pmem -e $logdir -j $decode_nodes --baseport $portn --";
 	}
 	my $cmd = "$pcmd $decoder_cmd 2> $decoderLog 1> $runFile";
 	print STDERR "COMMAND:\n$cmd\n";
