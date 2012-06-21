@@ -21,7 +21,7 @@
 my $SCRIPT_DIR; BEGIN { use Cwd qw/ abs_path /; use File::Basename; $SCRIPT_DIR = dirname(abs_path($0)); push @INC, $SCRIPT_DIR, "$SCRIPT_DIR/../environment"; }
 use LocalConfig;
 
-use Cwd qw/ abs_path cwd getcwd /; 
+use Cwd qw/ abs_path cwd getcwd /;
 use File::Temp qw/ tempfile /;
 use Getopt::Long;
 use IPC::Open2;
@@ -207,17 +207,17 @@ chomp $host;
 
 # find open port
 srand;
-my $port = 50300+int(rand($randp));
+my $port = $basep+int(rand($randp));
 my $endp=$port+$tryp;
 sub listening_port_lines {
     my $quiet=$verbose?'':'2>/dev/null';
-    return unchecked_output("netstat -a -n $quiet | grep LISTENING | grep -i tcp");
+    # try to accommadate the difference between Linux's and BSD's netstat
+    return unchecked_output("netstat -an $quiet | grep -i ^tcp | grep LISTEN");
 }
-my $netstat=&listening_port_lines;
 
 if ($verbose){ print STDERR "Testing port $port...";}
 
-while ($netstat=~/$port/ || &listening_port_lines=~/$port/){
+while (&listening_port_lines=~/:$port\b/){
   if ($verbose){ print STDERR "port is busy\n";}
   $port++;
   if ($port > $endp){
