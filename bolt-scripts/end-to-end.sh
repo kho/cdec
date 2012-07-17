@@ -61,6 +61,9 @@ fi
 
 SCRIPTS="$(readlink -f $(dirname $0))"
 
+echo "Input size:"
+wc -l "$input"
+
 # grammar extraction
 GRAMMAR=`mktemp -d`
 (/usr/bin/time -v "$SCRIPTS/grammar_extraction.sh" -g "$GRAMMAR" -c "$econf" -j "$ecpus" < "$input" 2> "$error/extract.log") || failure_extraction=1
@@ -72,7 +75,10 @@ if [ "$failure_extraction" ]; then
     rm -rf "$GRAMMAR"
     exit 1
 fi
+echo "Grammar disk usage:"
+du -hs "$GRAMMAR"
 echo "Grammar extraction done"
+
 
 # decoding
 DECERR=`mktemp -d`
