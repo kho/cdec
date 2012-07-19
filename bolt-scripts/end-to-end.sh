@@ -82,7 +82,7 @@ echo "Grammar extraction done"
 
 # decoding
 DECERR=`mktemp -d`
-(/usr/bin/time -v "$SCRIPTS/decode.sh" -g "$GRAMMAR" -j "$dcpus" -e "$DECERR" -- -c "$dconf" -w "$dweight" -k200 -r < "$input" 2> "$error/decode.log" | "$SCRIPTS/clean-nbest.py" | tee "$output/nbest" | "$SCRIPTS/mbr-1-best.pl" > "$output/1best") || failure_decoding=1
+(/usr/bin/time -v "$SCRIPTS/decode.sh" -g "$GRAMMAR" -j "$dcpus" -e "$DECERR" -- -c "$dconf" -w "$dweight" -k100 -r < "$input" 2> "$error/decode.log" | "$SCRIPTS/clean-nbest.py" | tee "$output/nbest" | "$SCRIPTS/mbr-1-best.pl" > "$output/1best") || failure_decoding=1
 mkdir -p "$error/decode.ER"
 cp "$DECERR"/*.ER "$error/decode.ER"
 
