@@ -3,9 +3,11 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/test/floating_point_comparison.hpp>
 
+#include "ns.h"
 #include "tdict.h"
 #include "scorer.h"
 #include "aer_scorer.h"
+#include "kernel_string_subseq.h"
 
 using namespace std;
 
