@@ -5,10 +5,15 @@
 
 #include "murmur_hash.h"
 
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
+
 #ifdef HAVE_SPARSEHASH
-# include <google/dense_hash_map>
-# include <google/dense_hash_set>
+# include <sparsehash/dense_hash_map>
+# include <sparsehash/dense_hash_set>
+# include <sparsehash/sparse_hash_map>
+# define SPARSE_HASH_MAP google::sparse_hash_map
 # define HASH_MAP google::dense_hash_map
 # define HASH_SET google::dense_hash_set
 # define HASH_MAP_RESERVED(h,empty,deleted) do { h.set_empty_key(empty); h.set_deleted_key(deleted); } while(0)
@@ -16,6 +21,7 @@
 #else
 # include <tr1/unordered_map>
 # include <tr1/unordered_set>
+# define SPARSE_HASH_MAP std::tr1::unordered_map
 # define HASH_MAP std::tr1::unordered_map
 # define HASH_SET std::tr1::unordered_set
 # define HASH_MAP_RESERVED(h,empty,deleted)
@@ -130,8 +136,7 @@ bool maybe_add(H &ht,K const& k,typename H::mapped_type const& v) {
 // ht[k] must not exist (yet)
 template <class H,class K>
 void add(H &ht,K const& k,typename H::mapped_type const& v) {
-  bool fresh=maybe_add(ht,k,v);
-  assert(fresh);
+  maybe_add(ht,k,v);
 }
 
 

@@ -11,6 +11,7 @@
 #include "tdict.h"
 #include "lm/model.hh"
 #include "lm/enumerate_vocab.hh"
+#include "utils/verbose.h"
 
 #include "lm/left.hh"
 
@@ -232,7 +233,8 @@ class KLanguageModelImpl {
       ngram_ = new Model(filename.c_str(), conf);
     }
     order_ = ngram_->Order();
-    cerr << "Loaded " << order_ << "-gram KLM from " << filename << " (MapSize=" << cdec2klm_map_.size() << ")\n";
+    if (!SILENT)
+      cerr << "Loaded " << order_ << "-gram KLM from " << filename << " (MapSize=" << cdec2klm_map_.size() << ")\n";
 
     // special handling of beginning / ending sentence markers
     kSOS_ = MapWord(kCDEC_SOS);
@@ -252,7 +254,8 @@ class KLanguageModelImpl {
     string line;
     vector<WordID> dummy;
     int lc = 0;
-    cerr << "  Loading word classes from " << file << " ...\n";
+    if (!SILENT)
+      cerr << "  Loading word classes from " << file << " ...\n";
     AddWordToClassMapping_(TD::Convert("<s>"), TD::Convert("<s>"));
     AddWordToClassMapping_(TD::Convert("</s>"), TD::Convert("</s>"));
     while(in) {
@@ -373,15 +376,17 @@ boost::shared_ptr<FeatureFunction> KLanguageModelFactory::Create(std::string par
   if (!RecognizeBinary(filename.c_str(), m)) m = HASH_PROBING;
 
   switch (m) {
-    case HASH_PROBING:
+    case PROBING:
       return CreateModel<ProbingModel>(param);
-    case TRIE_SORTED:
+    case REST_PROBING:
+      return CreateModel<RestProbingModel>(param);
+    case TRIE:
       return CreateModel<TrieModel>(param);
-    case ARRAY_TRIE_SORTED:
+    case ARRAY_TRIE:
       return CreateModel<ArrayTrieModel>(param);
-    case QUANT_TRIE_SORTED:
+    case QUANT_TRIE:
       return CreateModel<QuantTrieModel>(param);
-    case QUANT_ARRAY_TRIE_SORTED:
+    case QUANT_ARRAY_TRIE:
       return CreateModel<QuantArrayTrieModel>(param);
     default:
       UTIL_THROW(util::Exception, "Unrecognized kenlm binary file type " << (unsigned)m);

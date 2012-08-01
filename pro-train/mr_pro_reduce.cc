@@ -11,6 +11,7 @@
 #include "weights.h"
 #include "sparse_vector.h"
 #include "optimize.h"
+#include "liblbfgs/lbfgs++.h"
 
 using namespace std;
 namespace po = boost::program_options;
@@ -24,6 +25,7 @@ void InitCommandLine(int argc, char** argv, po::variables_map* conf) {
   opts.add_options()
         ("weights,w", po::value<string>(), "Weights from previous iteration (used as initialization and interpolation")
         ("regularization_strength,C",po::value<double>()->default_value(500.0), "l2 regularization strength")
+        ("l1",po::value<double>()->default_value(0.0), "l1 regularization strength")
         ("regularize_to_weights,y",po::value<double>()->default_value(5000.0), "Differences in learned weights to previous weights are penalized with an l2 penalty with this strength; 0.0 = no effect")
         ("memory_buffers,m",po::value<unsigned>()->default_value(100), "Number of memory buffers (LBFGS)")
         ("min_reg,r",po::value<double>()->default_value(0.01), "When tuning (-T) regularization strength, minimum regularization strenght")
@@ -89,10 +91,10 @@ void ReadCorpus(istream* pin, vector<pair<bool, SparseVector<weight_t> > >* corp
   if (flag) cerr << endl;
 }
 
-void GradAdd(const SparseVector<weight_t>& v, const double scale, vector<weight_t>* acc) {
+void GradAdd(const SparseVector<weight_t>& v, const double scale, weight_t* acc) {
   for (SparseVector<weight_t>::const_iterator it = v.begin();
        it != v.end(); ++it) {
-    (*acc)[it->first] += it->second * scale;
+    acc[it->first] += it->second * scale;
   }
 }
 
@@ -100,26 +102,24 @@ double ApplyRegularizationTerms(const double C,
                                 const double T,
                                 const vector<weight_t>& weights,
                                 const vector<weight_t>& prev_weights,
-                                vector<weight_t>* g) {
-  assert(weights.size() == g->size());
+                                weight_t* g) {
   double reg = 0;
   for (size_t i = 0; i < weights.size(); ++i) {
     const double prev_w_i = (i < prev_weights.size() ? prev_weights[i] : 0.0);
     const double& w_i = weights[i];
-    double& g_i = (*g)[i];
     reg += C * w_i * w_i;
-    g_i += 2 * C * w_i;
+    g[i] += 2 * C * w_i;
 
     const double diff_i = w_i - prev_w_i;
     reg += T * diff_i * diff_i;
-    g_i += 2 * T * diff_i;
+    g[i] += 2 * T * diff_i;
   }
   return reg;
 }
 
 double TrainingInference(const vector<weight_t>& x,
                          const vector<pair<bool, SparseVector<weight_t> > >& corpus,
-                         vector<weight_t>* g = NULL) {
+                         weight_t* g = NULL) {
   double cll = 0;
   for (int i = 0; i < corpus.size(); ++i) {
     const double dotprod = corpus[i].second.dot(x) + (x.size() ? x[0] : weight_t()); // x[0] is bias
@@ -139,64 +139,58 @@ double TrainingInference(const vector<weight_t>& x,
       if (g) {
         // g -= corpus[i].second * exp(lp_false);
         GradAdd(corpus[i].second, -exp(lp_false), g);
-        (*g)[0] -= exp(lp_false); // bias
+        g[0] -= exp(lp_false); // bias
       }
     } else {                  // false label
       cll -= lp_false;
       if (g) {
         // g += corpus[i].second * exp(lp_true);
         GradAdd(corpus[i].second, exp(lp_true), g);
-        (*g)[0] += exp(lp_true); // bias
+        g[0] += exp(lp_true); // bias
       }
     }
   }
   return cll;
 }
 
+struct ProLoss {
+  ProLoss(const vector<pair<bool, SparseVector<weight_t> > >& tr,
+          const vector<pair<bool, SparseVector<weight_t> > >& te,
+          const double c,
+          const double t,
+          const vector<weight_t>& px) : training(tr), testing(te), C(c), T(t), prev_x(px){}
+  double operator()(const vector<double>& x, double* g) const {
+    fill(g, g + x.size(), 0.0);
+    double cll = TrainingInference(x, training, g);
+    tppl = 0;
+    if (testing.size())
+      tppl = pow(2.0, TrainingInference(x, testing, g) / (log(2) * testing.size()));
+    double ppl = cll / log(2);
+    ppl /= training.size();
+    ppl = pow(2.0, ppl);
+    double reg = ApplyRegularizationTerms(C, T, x, prev_x, g);
+    return cll + reg;
+  }
+  const vector<pair<bool, SparseVector<weight_t> > >& training, testing;
+  const double C, T;
+  const vector<double>& prev_x;
+  mutable double tppl;
+};
+
 // return held-out log likelihood
 double LearnParameters(const vector<pair<bool, SparseVector<weight_t> > >& training,
                        const vector<pair<bool, SparseVector<weight_t> > >& testing,
                        const double C,
+                       const double C1,
                        const double T,
                        const unsigned memory_buffers,
                        const vector<weight_t>& prev_x,
                        vector<weight_t>* px) {
-  vector<weight_t>& x = *px;
-  vector<weight_t> vg(FD::NumFeats(), 0.0);
-  bool converged = false;
-  LBFGSOptimizer opt(FD::NumFeats(), memory_buffers);
-  double tppl = 0.0;
-  while(!converged) {
-    fill(vg.begin(), vg.end(), 0.0);
-    double cll = TrainingInference(x, training, &vg);
-    double ppl = cll / log(2);
-    ppl /= training.size();
-    ppl = pow(2.0, ppl);
-
-    // evaluate optional held-out test set
-    if (testing.size()) {
-      tppl = TrainingInference(x, testing) / log(2);
-      tppl /= testing.size();
-      tppl = pow(2.0, tppl);
-    }
-
-    // handle regularizer
-    double reg = ApplyRegularizationTerms(C, T, x, prev_x, &vg);
-    cll += reg;
-    cerr << cll << " (REG=" << reg << ")\tPPL=" << ppl << "\t TEST_PPL=" << tppl << "\t" << endl;
-    try {
-      opt.Optimize(cll, vg, &x);
-      converged = opt.HasConverged();
-    } catch (...) {
-      cerr << "Exception caught, assuming convergence is close enough...\n";
-      converged = true;
-    }
-    if (fabs(x[0]) > MAX_BIAS) {
-      cerr << "Biased model learned. Are your training instances wrong?\n";
-      cerr << "  BIAS: " << x[0] << endl;
-    }
-  }
-  return tppl;
+  assert(px->size() == prev_x.size());
+  ProLoss loss(training, testing, C, T, prev_x);
+  LBFGS<ProLoss> lbfgs(px, loss, memory_buffers, C1);
+  lbfgs.MinimizeFunction();
+  return loss.tppl;
 }
 
 int main(int argc, char** argv) {
@@ -212,10 +206,11 @@ int main(int argc, char** argv) {
   const double min_reg = conf["min_reg"].as<double>();
   const double max_reg = conf["max_reg"].as<double>();
   double C = conf["regularization_strength"].as<double>(); // will be overridden if parameter is tuned
+  double C1 = conf["l1"].as<double>(); // will be overridden if parameter is tuned
   const double T = conf["regularize_to_weights"].as<double>();
-  assert(C > 0.0);
-  assert(min_reg > 0.0);
-  assert(max_reg > 0.0);
+  assert(C >= 0.0);
+  assert(min_reg >= 0.0);
+  assert(max_reg >= 0.0);
   assert(max_reg > min_reg);
   const double psi = conf["interpolate_with_weights"].as<double>();
   if (psi < 0.0 || psi > 1.0) { cerr << "Invalid interpolation weight: " << psi << endl; return 1; }
@@ -248,7 +243,7 @@ int main(int argc, char** argv) {
     cerr << "SWEEP FACTOR: " << sweep_factor << endl;
     while(C < max_reg) {
       cerr << "C=" << C << "\tT=" <<T << endl;
-      tppl = LearnParameters(training, testing, C, T, conf["memory_buffers"].as<unsigned>(), prev_x, &x);
+      tppl = LearnParameters(training, testing, C, C1, T, conf["memory_buffers"].as<unsigned>(), prev_x, &x);
       sp.push_back(make_pair(C, tppl));
       C *= sweep_factor;
     }
@@ -271,7 +266,7 @@ int main(int argc, char** argv) {
     }
     C = sp[best_i].first;
   }  // tune regularizer
-  tppl = LearnParameters(training, testing, C, T, conf["memory_buffers"].as<unsigned>(), prev_x, &x);
+  tppl = LearnParameters(training, testing, C, C1, T, conf["memory_buffers"].as<unsigned>(), prev_x, &x);
   if (conf.count("weights")) {
     for (int i = 1; i < x.size(); ++i) {
       x[i] = (x[i] * psi) + prev_x[i] * (1.0 - psi);

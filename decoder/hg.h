@@ -43,7 +43,7 @@ public:
   Hypergraph() : is_linear_chain_(false) {}
 
   // SmallVector is a fast, small vector<int> implementation for sizes <= 2
-  typedef SmallVectorInt TailNodeVector; // indices in nodes_
+  typedef SmallVectorUnsigned TailNodeVector; // indices in nodes_
   typedef std::vector<int> EdgesVector; // indices in edges_
 
   // TODO get rid of cat_?
@@ -148,7 +148,7 @@ public:
     void show(std::ostream &o,unsigned mask=SPAN|RULE) const {
       o<<'{';
       if (mask&CATEGORY)
-        o<<TD::Convert(rule_->GetLHS());
+        o<< '[' << TD::Convert(-rule_->GetLHS()) << ']';
       if (mask&PREV_SPAN)
         o<<'<'<<prev_i_<<','<<prev_j_<<'>';
       if (mask&SPAN)
@@ -156,9 +156,9 @@ public:
       if (mask&PROB)
         o<<" p="<<edge_prob_;
       if (mask&FEATURES)
-        o<<" "<<feature_values_;
+        o<<' '<<feature_values_;
       if (mask&RULE)
-        o<<rule_->AsString(mask&RULE_LHS);
+        o<<' '<<rule_->AsString(mask&RULE_LHS);
       if (USE_INFO_EDGE) {
         std::string const& i=info();
         if (mask&&!i.empty()) o << " |||"<<i; // remember, the initial space is expected as part of i
@@ -189,7 +189,7 @@ public:
       o<<'(';
       show(o,show_mask);
       if (indent) o<<'\n';
-      for (int i=0;i<tail_nodes_.size();++i) {
+      for (unsigned i=0;i<tail_nodes_.size();++i) {
         TEdgeHandle c=re(tail_nodes_[i],i,eh);
         Edge const* cp=c;
         if (cp) {
@@ -314,7 +314,7 @@ public:
 
 private:
   void index_tails(Edge const& edge) {
-    for (int i = 0; i < edge.tail_nodes_.size(); ++i)
+    for (unsigned i = 0; i < edge.tail_nodes_.size(); ++i)
       nodes_[edge.tail_nodes_[i]].out_edges_.push_back(edge.id_);
   }
 public:
@@ -348,7 +348,7 @@ public:
     edge->rule_ = rule;
     edge->tail_nodes_ = tail;
     edge->id_ = eid;
-    for (int i = 0; i < edge->tail_nodes_.size(); ++i)
+    for (unsigned i = 0; i < edge->tail_nodes_.size(); ++i)
       nodes_[edge->tail_nodes_[i]].out_edges_.push_back(edge->id_);
     return edge;
   }
@@ -384,19 +384,11 @@ public:
   // compute the total number of paths in the forest
   double NumberOfPaths() const;
 
-  // BEWARE. this assumes that the source and target language
-  // strings are identical and that there are no loops.
-  // It assumes a bunch of other things about where the
-  // epsilons will be.  It tries to assert failure if you
-  // break these assumptions, but it may not.
-  // TODO - make this work
-  void EpsilonRemove(WordID eps);
-
   // multiple the weights vector by the edge feature vector
   // (inner product) to set the edge probabilities
   template <class V>
   void Reweight(const V& weights) {
-    for (int i = 0; i < edges_.size(); ++i) {
+    for (unsigned i = 0; i < edges_.size(); ++i) {
       Edge& e = edges_[i];
       e.edge_prob_.logeq(e.feature_values_.dot(weights));
     }
@@ -456,8 +448,6 @@ public:
 //  void SortInEdgesByEdgeWeights(); // local sort only - pretty useless
 
   void PruneUnreachable(int goal_node_id); // DEPRECATED
-
-  void RemoveNoncoaccessibleStates(int goal_node_id = -1);
 
   // remove edges from the hypergraph if prune_edge[edge_id] is true
   // note: if run_inside_algorithm is false, then consumers may be unhappy if you pruned nodes that are built on by nodes that are kept.
@@ -524,7 +514,7 @@ public:
 
   template <class V>
   void visit_edges(V &v) {
-    for (int i=0;i<edges_.size();++i)
+    for (unsigned i=0;i<edges_.size();++i)
       v(edges_[i].head_node_,i,edges_[i]);
   }
 
@@ -537,9 +527,6 @@ public:
 
 private:
   Hypergraph(int num_nodes, int num_edges, bool is_lc) : is_linear_chain_(is_lc), nodes_(num_nodes), edges_(num_edges),edges_topo_(true) {}
-
-  static TRulePtr kEPSRule;
-  static TRulePtr kUnaryRule;
 };
 
 

@@ -20,7 +20,6 @@
 #define reverse_foreach BOOST_REVERSE_FOREACH
 
 using namespace std;
-static bool usingSentenceGrammar = false;
 static bool printGrammarsUsed = false;
 
 struct SCFGTranslatorImpl {
@@ -33,7 +32,7 @@ struct SCFGTranslatorImpl {
   {
     if(conf.count("grammar")){
       vector<string> gfiles = conf["grammar"].as<vector<string> >();
-      for (int i = 0; i < gfiles.size(); ++i) {
+      for (unsigned i = 0; i < gfiles.size(); ++i) {
         if (!SILENT) cerr << "Reading SCFG grammar from " << gfiles[i] << endl;
         TextGrammar* g = new TextGrammar(gfiles[i]);
         g->SetMaxSpan(max_span_limit);
@@ -91,31 +90,31 @@ struct SCFGTranslatorImpl {
   bool show_tree_structure_;
   unsigned int ctf_iterations_;
   vector<GrammarPtr> grammars;
-  GrammarPtr sup_grammar_;
+  set<GrammarPtr> sup_grammars_;
 
-  struct Equals { Equals(const GrammarPtr& v) : v_(v) {}
-                  bool operator()(const GrammarPtr& x) const { return x == v_; } const GrammarPtr& v_; };
+  struct ContainedIn {
+    ContainedIn(const set<GrammarPtr>& gs) : gs_(gs) {}
+    bool operator()(const GrammarPtr& x) const { return gs_.find(x) != gs_.end(); }
+    const set<GrammarPtr>& gs_;
+  };
 
-  void SetSupplementalGrammar(const std::string& grammar_string) {
-    grammars.erase(remove_if(grammars.begin(), grammars.end(), Equals(sup_grammar_)), grammars.end());
+  void AddSupplementalGrammarFromString(const std::string& grammar_string) {
+    grammars.erase(remove_if(grammars.begin(), grammars.end(), ContainedIn(sup_grammars_)), grammars.end());
     istringstream in(grammar_string);
-    sup_grammar_.reset(new TextGrammar(&in));
-    grammars.push_back(sup_grammar_);
-  }
-
-  struct NameEquals { NameEquals(const string name) : name_(name) {}
-                      bool operator()(const GrammarPtr& x) const { return x->GetGrammarName() == name_; } const string name_; };
-
-  void SetSentenceGrammarFromString(const std::string& grammar_str) {
-    assert(grammar_str != "");
-    if (!SILENT) cerr << "Setting sentence grammar" << endl;
-    usingSentenceGrammar = true;
-    istringstream in(grammar_str);
     TextGrammar* sent_grammar = new TextGrammar(&in);
     sent_grammar->SetMaxSpan(max_span_limit);
-    sent_grammar->SetGrammarName("__psg");
-    grammars.erase(remove_if(grammars.begin(), grammars.end(), NameEquals("__psg")), grammars.end());
-    grammars.push_back(GrammarPtr(sent_grammar));
+    sent_grammar->SetGrammarName("SupFromString");
+    AddSupplementalGrammar(GrammarPtr(sent_grammar));
+  }
+
+  void AddSupplementalGrammar(GrammarPtr gp) {
+    sup_grammars_.insert(gp);
+    grammars.push_back(gp);
+  }
+
+  void RemoveSupplementalGrammars() {
+    grammars.erase(remove_if(grammars.begin(), grammars.end(), ContainedIn(sup_grammars_)), grammars.end());
+    sup_grammars_.clear();
   }
 
   bool Translate(const string& input,
@@ -132,7 +131,7 @@ struct SCFGTranslatorImpl {
       g->SetGrammarName("PassThrough");
       glist.push_back(GrammarPtr(g));
     }
-    for (int gi = 0; gi < glist.size(); ++gi) {
+    for (unsigned gi = 0; gi < glist.size(); ++gi) {
       if(printGrammarsUsed)
         cerr << "Using grammar::" << glist[gi]->GetGrammarName() << endl;
     }
@@ -147,7 +146,7 @@ struct SCFGTranslatorImpl {
     forest->Reweight(weights);
     if (use_ctf_) {
       Hypergraph::Node& goal_node = *(forest->nodes_.end()-1);
-      foreach(int edge_id, goal_node.in_edges_)
+      foreach(unsigned edge_id, goal_node.in_edges_)
         RefineRule(forest->edges_[edge_id].rule_, ctf_iterations_);
       double alpha = ctf_alpha_;
       bool found_parse=false;
@@ -155,7 +154,7 @@ struct SCFGTranslatorImpl {
         cerr << "Coarse-to-fine source parse, alpha=" << alpha << endl;
         found_parse = true;
         Hypergraph refined_forest = *forest;
-        for (int j=0; j < ctf_iterations_; ++j) {
+        for (unsigned j=0; j < ctf_iterations_; ++j) {
           cerr << viterbi_stats(refined_forest,"  Coarse forest",true,show_tree_structure_);
           cerr << "  Iteration " << (j+1) << ": Pruning forest... ";
           refined_forest.BeamPruneInsideOutside(1.0, false, alpha, NULL);
@@ -178,7 +177,7 @@ struct SCFGTranslatorImpl {
       if (!found_parse){
         if (ctf_exhaustive_){
           cerr << "Last resort: refining coarse forest without pruning...";
-          for (int j=0; j < ctf_iterations_; ++j) {
+          for (unsigned j=0; j < ctf_iterations_; ++j) {
             if (RefineForest(forest)){
               cerr << "  Refinement succeeded." << endl;
               forest->Reweight(weights);
@@ -213,7 +212,7 @@ struct SCFGTranslatorImpl {
         Hypergraph::Edge& edge = forest->edges_[edge_id];
         std::vector<int> nt_positions;
         TRulePtr& coarse_rule_ptr = edge.rule_;
-        for(int i=0; i< coarse_rule_ptr->f_.size(); ++i){
+        for(unsigned i=0; i< coarse_rule_ptr->f_.size(); ++i){
           if (coarse_rule_ptr->f_[i] < 0)
             nt_positions.push_back(i);
         }
@@ -225,7 +224,7 @@ struct SCFGTranslatorImpl {
         // fine rules apply only if state splits on tail nodes match fine rule nonterminals
         foreach(TRulePtr& fine_rule_ptr, *(coarse_rule_ptr->fine_rules_)) {
           Hypergraph::TailNodeVector tail;
-          for (int pos_i=0; pos_i<nt_positions.size(); ++pos_i){
+          for (unsigned pos_i=0; pos_i<nt_positions.size(); ++pos_i){
             WordID fine_cat = fine_rule_ptr->f_[nt_positions[pos_i]];
             Split2Node::iterator it =
               s2n.find(StateSplit(edge.tail_nodes_[pos_i], fine_cat));
@@ -300,35 +299,24 @@ Check for grammar pointer in the sentence markup, for use with sentence specific
  */
 void SCFGTranslator::ProcessMarkupHintsImpl(const map<string, string>& kv) {
   map<string,string>::const_iterator it = kv.find("grammar");
-
-
-  if (it == kv.end()) {
-    usingSentenceGrammar= false;
-    return;
+  if (it != kv.end()) {
+    TextGrammar* sentGrammar = new TextGrammar(it->second);
+    sentGrammar->SetMaxSpan(pimpl_->max_span_limit);
+    sentGrammar->SetGrammarName(it->second);
+    pimpl_->AddSupplementalGrammar(GrammarPtr(sentGrammar));
   }
-  //Create sentence specific grammar from specified file name and load grammar into list of grammars
-  usingSentenceGrammar = true;
-  TextGrammar* sentGrammar = new TextGrammar(it->second);
-  sentGrammar->SetMaxSpan(pimpl_->max_span_limit);
-  sentGrammar->SetGrammarName(it->second);
-  pimpl_->grammars.push_back(GrammarPtr(sentGrammar));
-
 }
 
-void SCFGTranslator::SetSupplementalGrammar(const std::string& grammar) {
-  pimpl_->SetSupplementalGrammar(grammar);
+void SCFGTranslator::AddSupplementalGrammarFromString(const std::string& grammar) {
+  pimpl_->AddSupplementalGrammarFromString(grammar);
 }
 
-void SCFGTranslator::SetSentenceGrammarFromString(const std::string& grammar_str) {
-  pimpl_->SetSentenceGrammarFromString(grammar_str);
+void SCFGTranslator::AddSupplementalGrammar(GrammarPtr grammar) {
+  pimpl_->AddSupplementalGrammar(grammar);
 }
 
 void SCFGTranslator::SentenceCompleteImpl() {
-
-  if(usingSentenceGrammar)      // Drop the last sentence grammar from the list of grammars
-    {
-      pimpl_->grammars.pop_back();
-    }
+  pimpl_->RemoveSupplementalGrammars();
 }
 
 std::string SCFGTranslator::GetDecoderType() const {

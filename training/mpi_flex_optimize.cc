@@ -179,18 +179,16 @@ double ApplyRegularizationTerms(const double C,
                                 const double T,
                                 const vector<double>& weights,
                                 const vector<double>& prev_weights,
-                                vector<double>* g) {
-  assert(weights.size() == g->size());
+                                double* g) {
   double reg = 0;
   for (size_t i = 0; i < weights.size(); ++i) {
     const double prev_w_i = (i < prev_weights.size() ? prev_weights[i] : 0.0);
     const double& w_i = weights[i];
-    double& g_i = (*g)[i];
     reg += C * w_i * w_i;
-    g_i += 2 * C * w_i;
+    g[i] += 2 * C * w_i;
 
     reg += T * (w_i - prev_w_i) * (w_i - prev_w_i);
-    g_i += 2 * T * (w_i - prev_w_i);
+    g[i] += 2 * T * (w_i - prev_w_i);
   }
   return reg;
 }
@@ -358,14 +356,14 @@ int main(int argc, char** argv) {
           gg.clear();
           gg.resize(FD::NumFeats());
           if (gg.size() != cur_weights.size()) { cur_weights.resize(gg.size()); }
-          for (SparseVector<double>::const_iterator it = g.begin(); it != g.end(); ++it)
+          for (SparseVector<double>::iterator it = g.begin(); it != g.end(); ++it)
             if (it->first) { gg[it->first] = it->second; }
           g.clear();
           double r = ApplyRegularizationTerms(regularization_strength,
                                 time_series_strength, // * (iter == 0 ? 0.0 : 1.0),
                                 cur_weights,
                                 prev_weights,
-                                &gg);
+                                &gg[0]);
           obj += r;
           if (mi == 0 || mi == (minibatch_iterations - 1)) {
             if (!mi) cerr << iter << ' '; else cerr << ' ';

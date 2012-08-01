@@ -1,7 +1,9 @@
 #ifndef _FDICT_H_
 #define _FDICT_H_
 
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 
 #include <iostream>
 #include <string>
@@ -31,6 +33,8 @@ struct FD {
     assert(dict_.max() == 0);  // dictionary must not have
                                // been added to
     hash_ = new PerfectHashFunction(cmph_file);
+#else
+    (void) cmph_file;
 #endif
   }
   static inline int NumFeats() {

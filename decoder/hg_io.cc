@@ -1,5 +1,6 @@
 #include "hg_io.h"
 
+#include <fstream>
 #include <sstream>
 #include <iostream>
 
@@ -27,7 +28,7 @@ struct HGReader : public JSONParser {
       hg.ConnectEdgeToHeadNode(&hg.edges_[in_edges[i]], node);
     }
   }
-  void CreateEdge(const TRulePtr& rule, FeatureVector* feats, const SmallVectorInt& tail) {
+  void CreateEdge(const TRulePtr& rule, FeatureVector* feats, const SmallVectorUnsigned& tail) {
     Hypergraph::Edge* edge = hg.AddEdge(rule, tail);
     feats->swap(edge->feature_values_);
     edge->i_ = spans[0];
@@ -228,7 +229,7 @@ struct HGReader : public JSONParser {
   }
   string rp;
   string cat;
-  SmallVectorInt tail;
+  SmallVectorUnsigned tail;
   vector<int> in_edges;
   TRulePtr cur_rule;
   map<int, TRulePtr> rules;
@@ -260,6 +261,7 @@ static void WriteRule(const TRule& r, ostream* out) {
 }
 
 bool HypergraphIO::WriteToJSON(const Hypergraph& hg, bool remove_rules, ostream* out) {
+  if (hg.empty()) { *out << "{}\n"; return true; }
   map<const TRule*, int> rid;
   ostream& o = *out;
   rid[NULL] = 0;
@@ -487,13 +489,13 @@ int getInt(const std::string& in, int &c)
 #define MAX_NODES 100000000
 // parse ('foo', 0.23)
 void ReadPLFEdge(const std::string& in, int &c, int cur_node, Hypergraph* hg) {
-  if (get(in,c++) != '(') { assert(!"PCN/PLF parse error: expected ( at start of cn alt block\n"); }
+  if (get(in,c++) != '(') { cerr << "PCN/PLF parse error: expected (\n"; abort(); }
   vector<WordID> ewords(2, 0);
   ewords[1] = TD::Convert(getEscapedString(in,c));
   TRulePtr r(new TRule(ewords));
   r->ComputeArity();
   // cerr << "RULE: " << r->AsString() << endl;
-  if (get(in,c++) != ',') { cerr << in << endl; assert(!"PCN/PLF parse error: expected , after string\n"); }
+  if (get(in,c++) != ',') { cerr << in << endl; cerr << "PCN/PLF parse error: expected , after string\n"; abort(); }
   size_t cnNext = 1;
   std::vector<float> probs;
   probs.push_back(getFloat(in,c));
@@ -507,10 +509,9 @@ void ReadPLFEdge(const std::string& in, int &c, int cur_node, Hypergraph* hg) {
   if (probs.size()>1) {
     cnNext = static_cast<size_t>(probs.back());
     probs.pop_back();
-    if (cnNext < 1) { cerr << cnNext << endl;
-             assert(!"PCN/PLF parse error: bad link length at last element of cn alt block\n"); }
+    if (cnNext < 1) { cerr << cnNext << endl << "PCN/PLF parse error: bad link length at last element of cn alt block\n"; abort(); }
   }
-  if (get(in,c++) != ')') { assert(!"PCN/PLF parse error: expected ) at end of cn alt block\n"); }
+  if (get(in,c++) != ')') { cerr << "PCN/PLF parse error: expected ) at end of cn alt block\n"; abort(); }
   eatws(in,c);
   Hypergraph::TailNodeVector tail(1, cur_node);
   Hypergraph::Edge* edge = hg->AddEdge(r, tail);
@@ -651,22 +652,26 @@ void HypergraphIO::WriteAsCFG(const Hypergraph& hg) {
  *   for each downward edge:
  *     RHS with [vertex_index] for NTs ||| scores
  */
-void HypergraphIO::WriteTarget(const Hypergraph& hg) {
-  cout << hg.nodes_.size() << ' ' << hg.edges_.size() << '\n';
+void HypergraphIO::WriteTarget(const std::string &base, unsigned int id, const Hypergraph& hg) {
+  std::string name(base);
+  name += '/';
+  name += boost::lexical_cast<std::string>(id);
+  std::fstream out(name.c_str(), std::fstream::out);
+  out << hg.nodes_.size() << ' ' << hg.edges_.size() << '\n';
   for (unsigned int i = 0; i < hg.nodes_.size(); ++i) {
     const Hypergraph::EdgesVector &edges = hg.nodes_[i].in_edges_;
-    cout << edges.size() << '\n';
+    out << edges.size() << '\n';
     for (unsigned int j = 0; j < edges.size(); ++j) {
       const Hypergraph::Edge &edge = hg.edges_[edges[j]];
       const std::vector<WordID> &e = edge.rule_->e();
       for (std::vector<WordID>::const_iterator word = e.begin(); word != e.end(); ++word) {
         if (*word <= 0) {
-          cout << '[' << edge.tail_nodes_[-*word] << "] ";
+          out << '[' << edge.tail_nodes_[-*word] << "] ";
         } else {
-          cout << TD::Convert(*word) << ' ';
+          out << TD::Convert(*word) << ' ';
         }
       }
-      cout << "||| " << edge.rule_->scores_ << '\n';
+      out << "||| " << edge.rule_->scores_ << '\n';
     }
   }
 }

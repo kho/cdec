@@ -12,6 +12,7 @@
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/uniform_real.hpp>
 #include <boost/random/variate_generator.hpp>
+#include <boost/random/gamma_distribution.hpp>
 #include <boost/random/normal_distribution.hpp>
 #include <boost/random/poisson_distribution.hpp>
 #include <boost/random/uniform_int.hpp>
@@ -49,9 +50,10 @@ struct RandomNumberGenerator {
   size_t SelectSample(const F& a, const F& b, double T = 1.0) {
     if (T == 1.0) {
       if (F(this->next()) > (a / (a + b))) return 1; else return 0;
-    } else {
-      assert(!"not implemented");
     }
+    std::cerr << "SelectSample with annealing not implemented\n";
+    abort();
+    return 0;
   }
 
   // T is the annealing temperature, if desired
@@ -73,6 +75,18 @@ struct RandomNumberGenerator {
   // lambda must be greater than 0
   int NextPoisson(int lambda) {
     return boost::poisson_distribution<int>(lambda)(m_random);
+  }
+
+  double NextGamma(double shape, double scale = 1.0) {
+    boost::gamma_distribution<> gamma(shape);
+    boost::variate_generator<boost::mt19937&,boost::gamma_distribution<> > vg(m_generator, gamma);
+    return vg() * scale;
+  }
+
+  double NextBeta(double alpha, double beta) {
+    double x = NextGamma(alpha);
+    double y = NextGamma(beta);
+    return x / (x + y);
   }
 
   bool AcceptMetropolisHastings(const prob_t& p_cur,
@@ -122,11 +136,12 @@ size_t RandomNumberGenerator<RNG>::SelectSample(const SampleSet<F>& ss, double T
   const bool anneal = (T != 1.0);
   F sum = F(0);
   if (anneal) {
-    for (int i = 0; i < ss.m_scores.size(); ++i)
+    for (unsigned i = 0; i < ss.m_scores.size(); ++i)
       sum += pow(ss.m_scores[i], annealing_factor);  // p^(1/T)
   } else {
     sum = std::accumulate(ss.m_scores.begin(), ss.m_scores.end(), F(0));
   }
+  //std::cerr << "SUM: " << sum << std::endl;
   //for (size_t i = 0; i < ss.m_scores.size(); ++i) std::cerr << ss.m_scores[i] << ",";
   //std::cerr << std::endl;
 

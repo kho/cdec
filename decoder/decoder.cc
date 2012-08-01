@@ -3,6 +3,7 @@
 #include <tr1/unordered_map>
 #include <boost/program_options.hpp>
 #include <boost/program_options/variables_map.hpp>
+#include <boost/make_shared.hpp>
 
 #include "program_options.h"
 #include "stringlib.h"
@@ -122,13 +123,16 @@ inline bool store_conf(po::variables_map const& conf,std::string const& name,V *
 inline boost::shared_ptr<FeatureFunction> make_ff(string const& ffp,bool verbose_feature_functions,char const* pre="") {
   string ff, param;
   SplitCommandAndParam(ffp, &ff, &param);
-  cerr << pre << "feature: " << ff;
-  if (param.size() > 0) cerr << " (with config parameters '" << param << "')\n";
-  else cerr << " (no config parameters)\n";
+  if (verbose_feature_functions && !SILENT)
+    cerr << pre << "feature: " << ff;
+  if (!SILENT) {
+    if (param.size() > 0) cerr << " (with config parameters '" << param << "')\n";
+    else cerr << " (no config parameters)\n";
+  }
   boost::shared_ptr<FeatureFunction> pf = ff_registry.Create(ff, param);
   if (!pf) exit(1);
   int nbyte=pf->NumBytesContext();
-  if (verbose_feature_functions)
+  if (verbose_feature_functions && !SILENT)
     cerr<<"State is "<<nbyte<<" bytes for "<<pre<<"feature "<<ffp<<endl;
   return pf;
 }
@@ -142,7 +146,7 @@ inline boost::shared_ptr<FsaFeatureFunction> make_fsa_ff(string const& ffp,bool 
   else cerr << " (no config parameters)\n";
   boost::shared_ptr<FsaFeatureFunction> pf = fsa_ff_registry.Create(ff, param);
   if (!pf) exit(1);
-  if (verbose_feature_functions)
+  if (verbose_feature_functions && !SILENT)
     cerr<<"State is "<<pf->state_bytes()<<" bytes for "<<pre<<"feature "<<ffp<<endl;
   return pf;
 }
@@ -184,8 +188,8 @@ struct DecoderImpl {
   }
   void SetId(int next_sent_id) { sent_id = next_sent_id - 1; }
 
-  void forest_stats(Hypergraph &forest,string name,bool show_tree,bool show_deriv=false) {
-    cerr << viterbi_stats(forest,name,true,show_tree,show_deriv);
+  void forest_stats(Hypergraph &forest,string name,bool show_tree,bool show_deriv=false, bool extract_rules=false, boost::shared_ptr<WriteFile> extract_file = boost::make_shared<WriteFile>()) {
+    cerr << viterbi_stats(forest,name,true,show_tree,show_deriv,extract_rules, extract_file);
     cerr << endl;
   }
 
@@ -211,8 +215,10 @@ struct DecoderImpl {
       }
       forest.PruneInsideOutside(beam_prune,density_prune,pm,false,1);
       if (!forestname.empty()) forestname=" "+forestname;
-      forest_stats(forest,"  Pruned "+forestname+" forest",false,false);
-      cerr << "  Pruned "<<forestname<<" forest portion of edges kept: "<<forest.edges_.size()/presize<<endl;
+      if (!SILENT) { 
+        forest_stats(forest,"  Pruned "+forestname+" forest",false,false);
+        cerr << "  Pruned "<<forestname<<" forest portion of edges kept: "<<forest.edges_.size()/presize<<endl;
+      }
     }
   }
 
@@ -407,7 +413,7 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
         ("show_partition,z", "Compute and show the partition (inside score)")
         ("show_conditional_prob", "Output the conditional log prob to STDOUT instead of a translation")
         ("show_cfg_search_space", "Show the search space as a CFG")
-        ("show_target_graph", "Output the target hypergraph")
+        ("show_target_graph", po::value<string>(), "Directory to write the target hypergraphs to")
         ("coarse_to_fine_beam_prune", po::value<double>(), "Prune paths from coarse parse forest before fine parse, keeping paths within exp(alpha>=0)")
         ("ctf_beam_widen", po::value<double>()->default_value(2.0), "Expand coarse pass beam by this factor if no fine parse is found")
         ("ctf_num_widenings", po::value<int>()->default_value(2), "Widen coarse beam this many times before backing off to full parse")
@@ -419,7 +425,7 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
         ("tagger_tagset,t", po::value<string>(), "(Tagger) file containing tag set")
         ("csplit_output_plf", "(Compound splitter) Output lattice in PLF format")
         ("csplit_preserve_full_word", "(Compound splitter) Always include the unsegmented form in the output lattice")
-        ("extract_rules", po::value<string>(), "Extract the rules used in translation (de-duped) to this file")
+        ("extract_rules", po::value<string>(), "Extract the rules used in translation (not de-duped!) to a file in this directory")
         ("show_derivations", po::value<string>(), "Directory to print the derivation structures to")
         ("graphviz","Show (constrained) translation forest in GraphViz format")
         ("max_translation_beam,x", po::value<int>(), "Beam approximation to get max translation from the chart")
@@ -521,8 +527,8 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
   }
 
   formalism = LowercaseString(str("formalism",conf));
-  if (formalism != "scfg" && formalism != "fst" && formalism != "lextrans" && formalism != "pb" && formalism != "csplit" && formalism != "tagger" && formalism != "lexalign") {
-    cerr << "Error: --formalism takes only 'scfg', 'fst', 'pb', 'csplit', 'lextrans', 'lexalign', or 'tagger'\n";
+  if (formalism != "scfg" && formalism != "fst" && formalism != "lextrans" && formalism != "pb" && formalism != "csplit" && formalism != "tagger" && formalism != "lexalign" && formalism != "rescore") {
+    cerr << "Error: --formalism takes only 'scfg', 'fst', 'pb', 'csplit', 'lextrans', 'lexalign', 'rescore', or 'tagger'\n";
     cerr << dcmdline_options << endl;
     exit(1);
   }
@@ -564,6 +570,11 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
 
   // cube pruning pop-limit: we may want to configure this on a per-pass basis
   pop_limit = conf["cubepruning_pop_limit"].as<int>();
+
+  if (conf.count("extract_rules")) {
+    if (!DirectoryExists(conf["extract_rules"].as<string>()))
+      MkDirP(conf["extract_rules"].as<string>());
+  }
 
   // determine the number of rescoring/pruning/weighting passes configured
   const int MAX_PASSES = 3;
@@ -664,6 +675,8 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
     translator.reset(new LexicalTrans(conf));
   else if (formalism == "lexalign")
     translator.reset(new LexicalAlign(conf));
+  else if (formalism == "rescore")
+    translator.reset(new RescoreTranslator(conf));
   else if (formalism == "tagger")
     translator.reset(new Tagger(conf));
   else
@@ -707,9 +720,11 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
   cfg_options.Validate();
 #endif
 
-  if (conf.count("extract_rules"))
-    extract_file.reset(new WriteFile(str("extract_rules",conf)));
-
+  if (conf.count("extract_rules")) {
+    stringstream ss;
+    ss << sent_id;
+    extract_file.reset(new WriteFile(str("extract_rules",conf)+"/"+ss.str()));
+  }
   combine_size = conf["combine_size"].as<int>();
   if (combine_size < 1) combine_size = 1;
   sent_id = -1;
@@ -730,15 +745,13 @@ bool Decoder::Decode(const string& input, DecoderObserver* o) {
 }
 vector<weight_t>& Decoder::CurrentWeightVector() { return pimpl_->CurrentWeightVector(); }
 const vector<weight_t>& Decoder::CurrentWeightVector() const { return pimpl_->CurrentWeightVector(); }
-void Decoder::SetSupplementalGrammar(const std::string& grammar_string) {
-  assert(pimpl_->translator->GetDecoderType() == "SCFG");
-  static_cast<SCFGTranslator&>(*pimpl_->translator).SetSupplementalGrammar(grammar_string);
+void Decoder::AddSupplementalGrammar(GrammarPtr gp) {
+  static_cast<SCFGTranslator&>(*pimpl_->translator).AddSupplementalGrammar(gp);
 }
-void Decoder::SetSentenceGrammarFromString(const std::string& grammar_str) {
+void Decoder::AddSupplementalGrammarFromString(const std::string& grammar_string) {
   assert(pimpl_->translator->GetDecoderType() == "SCFG");
-  static_cast<SCFGTranslator&>(*pimpl_->translator).SetSentenceGrammarFromString(grammar_str);
+  static_cast<SCFGTranslator&>(*pimpl_->translator).AddSupplementalGrammarFromString(grammar_string);
 }
-
 
 bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
   string buf = input;
@@ -816,7 +829,7 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
   }
 
   if (conf.count("show_target_graph"))
-    HypergraphIO::WriteTarget(forest);
+    HypergraphIO::WriteTarget(conf["show_target_graph"].as<string>(), sent_id, forest);
 
   for (int pass = 0; pass < rescoring_passes.size(); ++pass) {
     const RescoringPass& rp = rescoring_passes[pass];
@@ -846,7 +859,7 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
 #endif
       forest.swap(rescored_forest);
       forest.Reweight(cur_weights);
-      if (!SILENT) forest_stats(forest,"  " + passtr +" forest",show_tree_structure,oracle.show_derivation);
+      if (!SILENT) forest_stats(forest,"  " + passtr +" forest",show_tree_structure,oracle.show_derivation, conf.count("extract_rules"), extract_file);
     }
 
     if (conf.count("show_partition")) {
@@ -965,14 +978,14 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
       {
         ReadFile rf(writer.fname_);
         bool succeeded = HypergraphIO::ReadFromJSON(rf.stream(), &new_hg);
-        assert(succeeded);
+        if (!succeeded) abort();
       }
       new_hg.Union(forest);
       bool succeeded = writer.Write(new_hg, false);
-      assert(succeeded);
+      if (!succeeded) abort();
     } else {
       bool succeeded = writer.Write(forest, false);
-      assert(succeeded);
+      if (!succeeded) abort();
     }
   }
 
@@ -1052,14 +1065,14 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
           {
             ReadFile rf(writer.fname_);
             bool succeeded = HypergraphIO::ReadFromJSON(rf.stream(), &new_hg);
-            assert(succeeded);
+            if (!succeeded) abort();
           }
           new_hg.Union(forest);
           bool succeeded = writer.Write(new_hg, false);
-          assert(succeeded);
+          if (!succeeded) abort();
         } else {
           bool succeeded = writer.Write(forest, false);
-          assert(succeeded);
+          if (!succeeded) abort();
         }
       }
       if (aligner_mode && !output_training_vector)
