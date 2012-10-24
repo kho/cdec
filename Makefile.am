@@ -1,10 +1,34 @@
 # warning - the subdirectories in the following list should
 # be kept in topologically sorted order. Also, DO NOT introduce
 # cyclic dependencies between these directories!
-SUBDIRS = utils mteval klm/util klm/lm decoder dpmert mira-vlad # phrasinator training training/liblbfgs mira dtrain dpmert pro-train rampion minrisk extools gi/pf gi/markov_al rst_parser
 
-#gi/pyp-topics/src gi/clda/src gi/posterior-regularisation/prjava
+# SUBDIRS = \
+#   utils \
+#   mteval \
+#   klm/util \
+#   klm/lm \
+#   klm/search \
+#   decoder \
+#   training \
+#   training/liblbfgs \
+#   mira \
+#   dtrain \
+#   dpmert \
+#   pro-train \
+#   rampion \
+#   minrisk \
+#   example_extff
+SUBDIRS = \
+  utils \
+  mteval \
+  klm/util \
+  klm/lm \
+  klm/search \
+  decoder \
+  dpmert \
+  mira-vlad
 
 AUTOMAKE_OPTIONS = foreign
 ACLOCAL_AMFLAGS = -I m4
 AM_CPPFLAGS =  -D_GLIBCXX_PARALLEL
+
