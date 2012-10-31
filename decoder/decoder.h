@@ -6,6 +6,7 @@
 #include <vector>
 #include <boost/shared_ptr.hpp>
 #include <boost/program_options/variables_map.hpp>
+#include <ff.h>
 
 #include "weights.h"  // weight_t
 
@@ -49,6 +50,14 @@ struct Decoder {
   std::vector<weight_t>& CurrentWeightVector();
   const std::vector<weight_t>& CurrentWeightVector() const;
 
+    //@author ferhanture
+    int GetDiscourseId();
+    std::vector<boost::shared_ptr<FeatureFunction> > GetFFs();
+    std::string GetTrans(int s);
+    void NewDocument();
+    void SetRuleFile(std::string f);
+    //END @author ferhanture
+    
   void SetId(int id);
   ~Decoder();
   const boost::program_options::variables_map& GetConf() const { return conf; }

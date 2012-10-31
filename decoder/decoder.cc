@@ -187,6 +187,16 @@ struct DecoderImpl {
   }
   void SetId(int next_sent_id) { sent_id = next_sent_id - 1; }
 
+    //@author ferhanture	
+    std::string GetTrans(int seg_id){ 
+        Int2StrMap::iterator iterator = translations.find(seg_id);
+        if(iterator != translations.end()){
+            return iterator->second;
+        }else {
+            return "NUL";
+        }
+    }
+
   void forest_stats(Hypergraph &forest,string name,bool show_tree,bool show_deriv=false, bool extract_rules=false, boost::shared_ptr<WriteFile> extract_file = boost::make_shared<WriteFile>()) {
     cerr << viterbi_stats(forest,name,true,show_tree,show_deriv,extract_rules, extract_file);
     cerr << endl;
@@ -328,6 +338,11 @@ struct DecoderImpl {
   bool remove_intersected_rule_annotations;
   boost::scoped_ptr<IncrementalBase> incremental;
 
+  //@author ferhanture
+  typedef unordered_map<int, string> Int2StrMap;
+  Int2StrMap translations;		// when randomizing a doc translation: keep track of latest translations of segments.
+  string rules_file;
+  int discourse_id;
 
   static void ConvertSV(const SparseVector<prob_t>& src, SparseVector<double>* trg) {
     for (SparseVector<prob_t>::const_iterator it = src.begin(); it != src.end(); ++it)
@@ -439,8 +454,12 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
         ("vector_format",po::value<string>()->default_value("b64"), "Sparse vector serialization format for feature expectations or gradients, includes (text or b64)")
         ("combine_size,C",po::value<int>()->default_value(1), "When option -G is used, process this many sentence pairs before writing the gradient (1=emit after every sentence pair)")
         ("forest_output,O",po::value<string>(),"Directory to write forests to")
-        ("remove_intersected_rule_annotations", "After forced decoding is completed, remove nonterminal annotations (i.e., the source side spans)");
-
+    ("remove_intersected_rule_annotations", "After forced decoding is completed, remove nonterminal annotations (i.e., the source side spans)")
+	//@author ferhanture
+    ("rules_dir",po::value<string>(),"DISCOURSE FEATURE: Directory to read rule frequency of each document from")
+    ("rules_file",po::value<string>(),"DISCOURSE FEATURE: File to read rule frequency of entire collection from")
+    ("df",po::value<vector<string> >()->composing(),"DISCOURSE FEATURE: File to read document frequency (df) values, followed by total number of documents");
+    
   // ob.AddOptions(&opts);
 #ifdef FSA_RESCORING
   po::options_description cfgo(cfg_options.description());
@@ -578,6 +597,9 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
       MkDirP(conf["extract_rules"].as<string>());
   }
 
+  // initialize
+  discourse_id = -1;
+
   // determine the number of rescoring/pruning/weighting passes configured
   const int MAX_PASSES = 3;
   for (int pass = 0; pass < MAX_PASSES; ++pass) {
@@ -601,7 +623,12 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
         vector<string> add_ffs;
         store_conf(conf,ff,&add_ffs);
         for (int i = 0; i < add_ffs.size(); ++i) {
-          pffs.push_back(make_ff(add_ffs[i],verbose_feature_functions));
+          size_t found = add_ffs[i].find("Discourse");
+	  if (found != string::npos){ 
+	    discourse_id = i;
+	    cerr << "Discourse id is " << i << endl;
+	  }
+	  pffs.push_back(make_ff(add_ffs[i],verbose_feature_functions));
           FeatureFunction const* p=pffs.back().get();
           rp.ffs.push_back(p);
           if (p->IsStateful()) { has_stateful = true; }
@@ -720,11 +747,6 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
   cfg_options.Validate();
 #endif
 
-  if (conf.count("extract_rules")) {
-    stringstream ss;
-    ss << sent_id;
-    extract_file.reset(new WriteFile(str("extract_rules",conf)+"/"+ss.str()));
-  }
   combine_size = conf["combine_size"].as<int>();
   if (combine_size < 1) combine_size = 1;
   sent_id = -1;
@@ -757,6 +779,21 @@ void Decoder::AddSupplementalGrammarFromString(const std::string& grammar_string
   static_cast<SCFGTranslator&>(*pimpl_->translator).AddSupplementalGrammarFromString(grammar_string);
 }
 
+//@author ferhanture
+int Decoder::GetDiscourseId(){ return pimpl_->discourse_id; }
+vector<boost::shared_ptr<FeatureFunction> > Decoder::GetFFs(){ return pimpl_->pffs; }
+
+void Decoder::SetRuleFile(string file) { pimpl_->rules_file = file; }
+
+std::string Decoder::GetTrans(int seg_id){ 
+	return pimpl_->GetTrans(seg_id);
+}
+
+void Decoder::NewDocument(){
+	(pimpl_->translations).clear();
+}
+//END @author ferhanture
+
 bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
   string buf = input;
   NgramCache::Clear();   // clear ngram cache for remote LM (if used)
@@ -767,6 +804,12 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
   if (sgml.find("id") != sgml.end())
     sent_id = atoi(sgml["id"].c_str());
 
+  if (conf.count("extract_rules")) {
+    stringstream ss;
+    ss << sent_id;
+    extract_file.reset(new WriteFile(str("extract_rules",conf)+"/"+ss.str()));
+  }
+  
   if (!SILENT) {
     cerr << "\nINPUT: ";
     if (buf.size() < 100)
@@ -819,6 +862,12 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
     const prob_t z = Inside<prob_t, EdgeProb>(forest);
     cerr << "  Partition         log(Z): " << log(z) << endl;
   }
+
+    //@author ferhanture
+    bool is_discourse = false;
+    if(conf.count("rules_file") || conf.count("rules_dir")){
+        is_discourse=true;
+    }
 
   SummaryFeature summary_feature_type = kNODE_RISK;
   if (conf["summary_feature_type"].as<string>() == "edge_risk")
@@ -1013,7 +1062,13 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
       if (!graphviz && !has_ref && !joshua_viz && !SILENT) {
         vector<WordID> trans;
         ViterbiESentence(forest, &trans);
-        cout << TD::GetString(trans) << endl << flush;
+          //@author ferhanture
+          if (is_discourse){
+              translations[sent_id] = TD::GetString(trans); 
+              cerr << "saved" << sent_id << "=" << translations[sent_id] << endl;
+          }else {
+              cout << TD::GetString(trans) << endl << flush;
+          }
       }
       if (joshua_viz) {
         cout << sent_id << " ||| " << JoshuaVisualizationString(forest) << " ||| 1.0 ||| " << -1.0 << endl << flush;
