@@ -90,7 +90,7 @@ namespace KBest {
       return EdgeHandle(nds[t].D[parent.d->j[taili]]);
     }
 
-    std::string derivation_tree(Derivation const& d,bool indent=true,int show_mask=Hypergraph::SPAN|Hypergraph::RULE,int maxdepth=0x7FFFFFFF,int depth=0) const {
+    std::string derivation_tree(Derivation const& d,bool indent=true,int show_mask=Hypergraph::SPAN|Hypergraph::RULE|Hypergraph::RULE_LHS,int maxdepth=0x7FFFFFFF,int depth=0) const {
       return d.edge->derivation_tree(*this,EdgeHandle(&d),indent,show_mask,maxdepth,depth);
     }
 
