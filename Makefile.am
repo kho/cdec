@@ -2,22 +2,6 @@
 # be kept in topologically sorted order. Also, DO NOT introduce
 # cyclic dependencies between these directories!
 
-# SUBDIRS = \
-#   utils \
-#   mteval \
-#   klm/util \
-#   klm/lm \
-#   klm/search \
-#   decoder \
-#   training \
-#   training/liblbfgs \
-#   mira \
-#   dtrain \
-#   dpmert \
-#   pro-train \
-#   rampion \
-#   minrisk \
-#   example_extff
 SUBDIRS = \
   utils \
   mteval \
@@ -25,11 +9,8 @@ SUBDIRS = \
   klm/lm \
   klm/search \
   decoder \
-  mira-vlad \
-  training \
-  training/liblbfgs \
-  word-aligner \
-  example_extff
+  training/utils \
+  mira-vlad
 
 #gi/pyp-topics/src gi/clda/src gi/posterior-regularisation/prjava
 
