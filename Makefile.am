@@ -25,8 +25,13 @@ SUBDIRS = \
   klm/lm \
   klm/search \
   decoder \
-  dpmert \
-  mira-vlad
+  mira-vlad \
+  training \
+  training/liblbfgs \
+  word-aligner \
+  example_extff
+
+#gi/pyp-topics/src gi/clda/src gi/posterior-regularisation/prjava
 
 AUTOMAKE_OPTIONS = foreign
 ACLOCAL_AMFLAGS = -I m4
