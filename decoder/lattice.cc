@@ -61,3 +61,10 @@ void LatticeTools::ConvertTextOrPLF(const string& text_or_plf, Lattice* pl) {
   pl->ComputeDistances();
 }
 
+void LatticeTools::ConvertLatticeToSentence(const Lattice &lat, std::vector<WordID> *sent) {
+  sent->clear();
+  assert(lat.IsSentence(true));
+  for (Lattice::const_iterator lit = lat.begin(); lit != lat.end(); ++lit)
+    if (lit->size())
+      sent->push_back(lit->front().label);
+}

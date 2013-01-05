@@ -11,6 +11,7 @@ struct LatticeTools {
   static bool LooksLikePLF(const std::string &line);
   static void ConvertTextToLattice(const std::string& text, Lattice* pl);
   static void ConvertTextOrPLF(const std::string& text_or_plf, Lattice* pl);
+  static void ConvertLatticeToSentence(const Lattice &lat, std::vector<WordID> *sent);
 };
 
 struct LatticeArc {
@@ -36,11 +37,24 @@ class Lattice : public std::vector<std::vector<LatticeArc> > {
   }
   // TODO this should actually be computed based on the contents
   // of the lattice
-  bool IsSentence() const { return is_sentence_; }
+  bool IsSentence(bool update=false) const {
+    if (update && !is_sentence_)
+      is_sentence_ = IsLinear();
+    return is_sentence_;
+  }
  private:
   void ComputeDistances();
+  bool IsLinear() const {
+    for (const_iterator it = begin(); it != end(); ++it) {
+      if (it->size() > 1)
+        return false;
+      else if (it->size() == 1 && it->front().dist2next != 1)
+        return false;
+    }
+    return true;
+  }
   Array2D<int> dist_;
-  bool is_sentence_;
+  mutable bool is_sentence_;
 };
 
 #endif
