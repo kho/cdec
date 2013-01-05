@@ -94,6 +94,10 @@ namespace KBest {
       return d.edge->derivation_tree(*this,EdgeHandle(&d),indent,show_mask,maxdepth,depth);
     }
 
+    void derivation_xml(std::ostringstream &output, const Derivation &d, bool indent=true, int depth=0) const {
+      d.edge->derivation_xml_stream(*this, EdgeHandle(&d), output, indent, depth);
+    }
+
     struct DerivationUniquenessHash {
       size_t operator()(const Derivation* d) const {
         size_t x = 5381;

@@ -14,10 +14,14 @@
 #endif
 #define INFO_EDGEln(e,msg) INFO_EDGE(e,msg<<'\n')
 
+#include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
 #include <boost/shared_ptr.hpp>
+#include <boost/spirit/include/classic_parser_id.hpp>
+#include <boost/spirit/include/classic_tree_to_xml.hpp>
 
 #include "feature_vector.h"
 #include "small_vector.h"
@@ -135,6 +139,109 @@ namespace HG {
       if (indent) for (int i=0;i<depth;++i) o<<' ';
       o<<")";
       if (indent) o<<"\n";
+    }
+
+    // Writes a derivation in IBM format (XML)
+    template <class EdgeRecurse, class TEdgeHandle>
+    void derivation_xml_stream(const EdgeRecurse &re, const TEdgeHandle &eh,
+                               std::ostream &output, bool indent=true, int depth=0) const {
+      // Adjust the offset of alignment points
+      std::map<int, int> adjust;
+      unsigned offset = 0;
+      unsigned nt = 0;
+      // For each f terminal in the rule, compute the offest
+      const std::vector<WordID> &f = rule_->f();
+      for (std::vector<WordID>::size_type fi = 0; fi != f.size(); ++fi) {
+        WordID c = f[fi];
+        if (c < 1) {
+          TEdgeHandle child = re(tail_nodes_[nt], nt, eh);
+          Edge const *child_ptr = child;
+          if (child_ptr)                // TODO: what happens if child_ptr is null?
+            offset += child_ptr->j_ - child_ptr->i_ - 1;
+          ++nt;
+        } else {
+          adjust[fi] = i_ + fi + offset;
+        }
+      }
+
+      // Map tgtidx to adjusted srcidx
+      typedef std::map<int, std::set<int> > TgtSrcMap;
+      TgtSrcMap tgt_src;
+      const std::vector<AlignmentPoint> &als = rule_->als();
+      for (std::vector<AlignmentPoint>::const_iterator it = als.begin();
+           it != als.end(); ++it)
+        tgt_src[it->t_].insert(adjust[it->s_]);
+
+      // Decide type; if there is no non-termnials, call it a
+      // `phrase'; otherwise call it a `hiero'.
+      std::string type = "phrase";
+      const std::vector<WordID> &e = rule_->e();
+      for (std::vector<WordID>::const_iterator eit = e.begin();
+           eit != e.end(); ++eit) {
+        if (*eit < 1) {
+          type = "hiero";
+          break;
+        }
+      }
+
+      // Write the opening, like <t score="2.5" srcidx="0,2-4" type="hiero">
+      if (indent) for (int i = 0; i < depth; ++i) output << ' ';
+      output << "<t score=\"" << edge_prob_.v_ << "\" srcidx=\""
+             << i_ << "-" << j_ - 1 << "\" type=\"" << type << "\">\n";
+
+      // For each e symbol in the rule, either recurse or output the terminal
+      for (std::vector<WordID>::size_type ei = 0; ei != e.size(); ++ei) {
+        WordID c = e[ei];
+        if (c < 1) {                    // var
+          c = -c;
+          TEdgeHandle child = re(tail_nodes_[c], c, eh);
+          Edge const *child_ptr = child;
+          if (child_ptr)                // TODO: what happens if child_ptr is null?
+            child_ptr->derivation_xml_stream(re, child, output, indent, depth+1);
+        } else {                        // terminal
+          if (indent) for (int j = 0; j < depth; ++j) output << ' ';
+          output << ' ';
+          // Opening
+          output << "<t score=\"0\" srcidx=\"";
+          // Format srcidx
+          std::ostringstream srcidx_str;
+          bool first = true;
+          TgtSrcMap::const_iterator srcidx_set = tgt_src.find(ei);
+          if (srcidx_set != tgt_src.end()) {
+            int last = -2;              // smallest possible valid last = 0
+            int len = 0;
+            for (std::set<int>::const_iterator sit = srcidx_set->second.begin();
+                 sit != srcidx_set->second.end(); ++sit) {
+              int cur = *sit;
+              if (last + 1 == cur)
+                ++len;
+              else {
+                if (last >= 0) {
+                // output last segment
+                  if (first) first = false; else srcidx_str << ',';
+                  if (len) srcidx_str << last << '-' << last + len;
+                  else srcidx_str << last;
+                }
+                // begin a new segment
+                last = cur;
+                len = 0;
+              }
+            }
+            if (last >= 0) {
+              // output last segment
+              if (first) first = false; else srcidx_str << ',';
+              if (len) srcidx_str << last << '-' << last + len;
+              else srcidx_str << last;
+            }
+          }
+
+          // The rest
+          output << srcidx_str.str() << "\" type=\"terminal\">" << boost::spirit::classic::xml::encode(TD::Convert(c)) << "</t>\n";
+        }
+      }
+      // Write the closing </t>
+      if (indent) for (int i = 0; i < depth; ++i) output << ' ';
+      output << "</t>\n";
     }
   };
 

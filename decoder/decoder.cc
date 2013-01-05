@@ -187,8 +187,8 @@ struct DecoderImpl {
   }
   void SetId(int next_sent_id) { sent_id = next_sent_id - 1; }
 
-    //@author ferhanture	
-    std::string GetTrans(int seg_id){ 
+    //@author ferhanture
+    std::string GetTrans(int seg_id){
         Int2StrMap::iterator iterator = translations.find(seg_id);
         if(iterator != translations.end()){
             return iterator->second;
@@ -224,7 +224,7 @@ struct DecoderImpl {
       }
       forest.PruneInsideOutside(beam_prune,density_prune,pm,false,1);
       if (!forestname.empty()) forestname=" "+forestname;
-      if (!SILENT) { 
+      if (!SILENT) {
         forest_stats(forest,"  Pruned "+forestname+" forest",false,false);
         cerr << "  Pruned "<<forestname<<" forest portion of edges kept: "<<forest.edges_.size()/presize<<endl;
       }
@@ -290,7 +290,7 @@ struct DecoderImpl {
       assert(ref);
       LatticeTools::ConvertTextOrPLF(sref, ref);
     }
-  } 
+  }
 
   // used to construct the suffix string to get the name of arguments for multiple passes
   // e.g., the "2" in --weights2
@@ -318,11 +318,12 @@ struct DecoderImpl {
   boost::shared_ptr<RandomNumberGenerator<boost::mt19937> > rng;
   int sample_max_trans;
   bool aligner_mode;
-  bool graphviz; 
+  bool graphviz;
   bool joshua_viz;
   bool encode_b64;
   bool kbest;
   bool unique_kbest;
+  bool xml_kbest;
   bool get_oracle_forest;
   boost::shared_ptr<WriteFile> extract_file;
   int combine_size;
@@ -454,12 +455,13 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
         ("vector_format",po::value<string>()->default_value("b64"), "Sparse vector serialization format for feature expectations or gradients, includes (text or b64)")
         ("combine_size,C",po::value<int>()->default_value(1), "When option -G is used, process this many sentence pairs before writing the gradient (1=emit after every sentence pair)")
         ("forest_output,O",po::value<string>(),"Directory to write forests to")
+      ("xml", "Output k-best in XML")
     ("remove_intersected_rule_annotations", "After forced decoding is completed, remove nonterminal annotations (i.e., the source side spans)")
 	//@author ferhanture
     ("rules_dir",po::value<string>(),"DISCOURSE FEATURE: Directory to read rule frequency of each document from")
     ("rules_file",po::value<string>(),"DISCOURSE FEATURE: File to read rule frequency of entire collection from")
     ("df",po::value<vector<string> >()->composing(),"DISCOURSE FEATURE: File to read document frequency (df) values, followed by total number of documents");
-    
+
   // ob.AddOptions(&opts);
 #ifdef FSA_RESCORING
   po::options_description cfgo(cfg_options.description());
@@ -624,7 +626,7 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
         store_conf(conf,ff,&add_ffs);
         for (int i = 0; i < add_ffs.size(); ++i) {
           size_t found = add_ffs[i].find("Discourse");
-	  if (found != string::npos){ 
+	  if (found != string::npos){
 	    discourse_id = i;
 	    cerr << "Discourse id is " << i << endl;
 	  }
@@ -739,6 +741,7 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
   encode_b64 = str("vector_format",conf) == "b64";
   kbest = conf.count("k_best");
   unique_kbest = conf.count("unique_k_best");
+  xml_kbest = conf.count("xml");
   get_oracle_forest = conf.count("get_oracle_forest");
   oracle.show_derivation=conf.count("show_derivations");
   remove_intersected_rule_annotations = conf.count("remove_intersected_rule_annotations");
@@ -785,7 +788,7 @@ vector<boost::shared_ptr<FeatureFunction> > Decoder::GetFFs(){ return pimpl_->pf
 
 void Decoder::SetRuleFile(string file) { pimpl_->rules_file = file; }
 
-std::string Decoder::GetTrans(int seg_id){ 
+std::string Decoder::GetTrans(int seg_id){
 	return pimpl_->GetTrans(seg_id);
 }
 
@@ -809,7 +812,7 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
     ss << sent_id;
     extract_file.reset(new WriteFile(str("extract_rules",conf)+"/"+ss.str()));
   }
-  
+
   if (!SILENT) {
     cerr << "\nINPUT: ";
     if (buf.size() < 100)
@@ -1057,7 +1060,10 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
     if (kbest && !has_ref) {
       //TODO: does this work properly?
       const string deriv_fname = conf.count("show_derivations") ? str("show_derivations",conf) : "-";
-      oracle.DumpKBest(sent_id, forest, conf["k_best"].as<int>(), unique_kbest,"-", deriv_fname);
+      if (xml_kbest)
+        oracle.DumpKBestXML(sent_id, to_translate, forest, conf["k_best"].as<int>(), unique_kbest, "-", deriv_fname);
+      else
+        oracle.DumpKBest(sent_id, forest, conf["k_best"].as<int>(), unique_kbest,"-", deriv_fname);
     } else if (csplit_output_plf) {
       cout << HypergraphIO::AsPLF(forest, false) << endl;
     } else {
@@ -1066,7 +1072,7 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
         ViterbiESentence(forest, &trans);
           //@author ferhanture
           if (is_discourse){
-              translations[sent_id] = TD::GetString(trans); 
+              translations[sent_id] = TD::GetString(trans);
               cerr << "saved" << sent_id << "=" << translations[sent_id] << endl;
           }else {
               cout << TD::GetString(trans) << endl << flush;
@@ -1208,4 +1214,3 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
   o->NotifyDecodingComplete(smeta);
   return true;
 }
-

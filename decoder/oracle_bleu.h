@@ -281,6 +281,46 @@ struct OracleBleu {
     }
   }
 
+  template <class Filter>
+  void kbest_xml(int sent_id, Hypergraph const& forest, int k,
+                 std::ostream &kbest_out=std::cout, std::ostream &deriv_out=std::cerr) {
+    using namespace std;
+    using namespace boost;
+    typedef KBest::KBestDerivations<Sentence, ESentenceTraversal, Filter> K;
+    K kbest(forest,k);
+
+    // store k best xml strings
+    std::vector<string> kbest_xml_strs;
+    for (int i = 0; i < k; ++i) {
+      typename K::Derivation *d = kbest.LazyKthBest(forest.nodes_.size() - 1, i);
+      if (!d) break;
+      std::ostringstream xml_str;
+      // <hyp rank="0" score="4.5">
+      xml_str << "<hyp rank=\"" << i << "\" score=\"" << log(d->score) << "\">\n";
+      kbest.derivation_xml(xml_str, *d);
+      // </hyp>
+      xml_str << "</hyp>\n";
+      kbest_xml_strs.push_back(xml_str.str());
+
+      if (!refs.empty()) {
+        ScoreP sentscore = GetScore(d->yield,sent_id);
+        sentscore->PlusEquals(*doc_score,float(1));
+      }
+      if (show_derivation) {
+        deriv_out<<"\nsent_id="<<sent_id<<"."<<i<<" ||| "; //where i is candidate #/k
+        deriv_out<<log(d->score)<<"\n";
+        deriv_out<<kbest.derivation_tree(*d,true);
+        deriv_out<<"\n"<<flush;
+      }
+    }
+    // <nbest count="2">
+    kbest_out << "<nbest count=\"" << kbest_xml_strs.size() << "\">\n";
+    // actual k best xml
+    for (std::vector<string>::const_iterator it = kbest_xml_strs.begin();
+         it != kbest_xml_strs.end(); ++it)
+      kbest_out << *it;
+  }
+
 // TODO decoder output should probably be moved to another file - how about oracle_bleu.h
   void DumpKBest(const int sent_id, const Hypergraph& forest, const int k, const bool unique, std::string const &kbest_out_filename_, std::string const &deriv_out_filename_) {
 
@@ -306,6 +346,37 @@ void DumpKBest(std::string const& suffix,const int sent_id, const Hypergraph& fo
     std::ostringstream kbest_string_stream;
     kbest_string_stream << forest_output << "/kbest_"<<suffix<< "." << sent_id;
     DumpKBest(sent_id, forest, k, unique, kbest_string_stream.str(), "-");
+  }
+
+  void DumpKBestXML(const int sent_id, const std::string &to_translate, const Hypergraph& forest, const int k, const bool unique, std::string const &kbest_out_filename_, std::string const &deriv_out_filename_) {
+
+    WriteFile ko(kbest_out_filename_);
+    std::cerr << "Output kbest in XML to " << kbest_out_filename_ <<std::endl;
+    std::ostringstream sderiv;
+    sderiv << deriv_out_filename_;
+    if (show_derivation) {
+      sderiv << "/derivs." << sent_id;
+      std::cerr << "Output derivations to " << deriv_out_filename_ << std::endl;
+    }
+    WriteFile oderiv(sderiv.str());
+
+    // <seg id="0" key1=value1 key2=value2 .. keyn=valuen>
+    ko.get() << "<seg id=\"" << sent_id << "\">\n";
+    // <src> <tok id="0">blah</tok> </src>; tok will not be inserted
+    ko.get() << "<src>\n";
+    Lattice tok;
+    LatticeTools::ConvertTextOrPLF(to_translate, &tok);
+    std::vector<WordID> tok_sent;
+    LatticeTools::ConvertLatticeToSentence(tok, &tok_sent);
+    for (std::vector<WordID>::size_type ti = 0; ti != tok_sent.size(); ++ti)
+      ko.get() << " <tok id=\"" << ti << "\">" << TD::Convert(tok_sent[ti]) << "</tok>\n";
+    ko.get() << "</src>\n";
+    if (!unique)
+      kbest_xml<KBest::NoFilter<std::vector<WordID> > >(sent_id,forest,k,ko.get(),oderiv.get());
+    else {
+      kbest_xml<KBest::FilterUnique>(sent_id,forest,k,ko.get(),oderiv.get());
+    }
+    ko.get() << "</nbest>\n</seg>\n";
   }
 
 };
