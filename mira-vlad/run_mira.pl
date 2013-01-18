@@ -34,10 +34,10 @@ my $dir;
 
 my $SCORER = $FAST_SCORE;
 my $local_server = "$bin_dir/local_parallelize.pl";
-my $parallelize = "$bin_dir/../dpmert/parallelize.pl";
-my $libcall = "$bin_dir/../dpmert/libcall.pl";
-my $sentserver = "$bin_dir/../dpmert/sentserver";
-my $sentclient = "$bin_dir/../dpmert/sentclient";
+my $parallelize = "$bin_dir/../training/utils/parallelize.pl";
+my $libcall = "$bin_dir/../training/utils/libcall.pl";
+my $sentserver = "$bin_dir/../training/utils/sentserver";
+my $sentclient = "$bin_dir/../training/utils/sentclient";
 my $run_local_server = 0;
 my $run_local = 0;
 my $usefork;
