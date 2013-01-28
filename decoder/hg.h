@@ -186,8 +186,12 @@ namespace HG {
 
       // Write the opening, like <t score="2.5" srcidx="0,2-4" type="hiero">
       if (indent) for (int i = 0; i < depth; ++i) output << ' ';
-      output << "<t score=\"" << edge_prob_.v_ << "\" srcidx=\""
-             << i_ << "-" << j_ - 1 << "\" type=\"" << type << "\">\n";
+      output << "<t score=\"" << edge_prob_.v_ << "\" srcidx=\"";
+      if (i_ == j_ - 1)
+        output << i_;
+      else
+        output << i_ << "-" << j_ - 1;
+      output<< "\" type=\"" << type << "\">\n";
 
       // For each e symbol in the rule, either recurse or output the terminal
       for (std::vector<WordID>::size_type ei = 0; ei != e.size(); ++ei) {
