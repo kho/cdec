@@ -1,2 +1,2 @@
-A B C D E F
-A B C D D E F
+<s> A B C D E F </s>
+<s> A B C D D E F </s>

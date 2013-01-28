@@ -1,44 +1,54 @@
 <seg id="0">
 <src>
- <tok id="0">A</tok>
- <tok id="1">B</tok>
- <tok id="2">C</tok>
- <tok id="3">D</tok>
- <tok id="4">E</tok>
- <tok id="5">F</tok>
+ <tok id="0">&lt;s&gt;</tok>
+ <tok id="1">A</tok>
+ <tok id="2">B</tok>
+ <tok id="3">C</tok>
+ <tok id="4">D</tok>
+ <tok id="5">E</tok>
+ <tok id="6">F</tok>
+ <tok id="7">&lt;/s&gt;</tok>
 </src>
 <nbest count="2">
 <hyp rank="0" score="4">
-<t score="0" srcidx="0-5" type="hiero">
- <t score="0" srcidx="0-5" type="hiero">
-  <t score="1" srcidx="0-5" type="hiero">
-   <t score="0" srcidx="0" type="terminal">a</t>
-   <t score="1" srcidx="5-5" type="phrase">
-    <t score="0" srcidx="5" type="terminal">f</t>
+<t score="0" srcidx="0-7" type="hiero">
+ <t score="0" srcidx="0-7" type="hiero">
+  <t score="0" srcidx="0-7" type="hiero">
+   <t score="0" srcidx="" type="terminal">&lt;s&gt;</t>
+   <t score="1" srcidx="1-6" type="hiero">
+    <t score="0" srcidx="1" type="terminal">a</t>
+    <t score="1" srcidx="6-6" type="phrase">
+     <t score="0" srcidx="6" type="terminal">f</t>
+    </t>
+    <t score="2" srcidx="2-4" type="phrase">
+     <t score="0" srcidx="2-3" type="terminal">b</t>
+     <t score="0" srcidx="4" type="terminal">d</t>
+    </t>
+    <t score="0" srcidx="5" type="terminal">e</t>
    </t>
-   <t score="2" srcidx="1-3" type="phrase">
-    <t score="0" srcidx="1-2" type="terminal">b</t>
-    <t score="0" srcidx="3" type="terminal">d</t>
-   </t>
-   <t score="0" srcidx="4" type="terminal">e</t>
+   <t score="0" srcidx="" type="terminal">&lt;/s&gt;</t>
   </t>
  </t>
 </t>
 </hyp>
 <hyp rank="1" score="3">
-<t score="0" srcidx="0-5" type="hiero">
- <t score="0" srcidx="0-5" type="hiero">
-  <t score="1" srcidx="0-5" type="hiero">
-   <t score="0" srcidx="0" type="terminal">a</t>
-   <t score="1" srcidx="5-5" type="phrase">
-    <t score="0" srcidx="5" type="terminal">f</t>
+<t score="0" srcidx="0-7" type="hiero">
+ <t score="0" srcidx="0-7" type="hiero">
+  <t score="0" srcidx="0-7" type="hiero">
+   <t score="0" srcidx="" type="terminal">&lt;s&gt;</t>
+   <t score="1" srcidx="1-6" type="hiero">
+    <t score="0" srcidx="1" type="terminal">a</t>
+    <t score="1" srcidx="6-6" type="phrase">
+     <t score="0" srcidx="6" type="terminal">f</t>
+    </t>
+    <t score="1" srcidx="2-4" type="phrase">
+     <t score="0" srcidx="2" type="terminal">b</t>
+     <t score="0" srcidx="3" type="terminal">c</t>
+     <t score="0" srcidx="4" type="terminal">d</t>
+    </t>
+    <t score="0" srcidx="5" type="terminal">e</t>
    </t>
-   <t score="1" srcidx="1-3" type="phrase">
-    <t score="0" srcidx="1" type="terminal">b</t>
-    <t score="0" srcidx="2" type="terminal">c</t>
-    <t score="0" srcidx="3" type="terminal">d</t>
-   </t>
-   <t score="0" srcidx="4" type="terminal">e</t>
+   <t score="0" srcidx="" type="terminal">&lt;/s&gt;</t>
   </t>
  </t>
 </t>
@@ -47,27 +57,33 @@
 </seg>
 <seg id="1">
 <src>
- <tok id="0">A</tok>
- <tok id="1">B</tok>
- <tok id="2">C</tok>
- <tok id="3">D</tok>
+ <tok id="0">&lt;s&gt;</tok>
+ <tok id="1">A</tok>
+ <tok id="2">B</tok>
+ <tok id="3">C</tok>
  <tok id="4">D</tok>
- <tok id="5">E</tok>
- <tok id="6">F</tok>
+ <tok id="5">D</tok>
+ <tok id="6">E</tok>
+ <tok id="7">F</tok>
+ <tok id="8">&lt;/s&gt;</tok>
 </src>
 <nbest count="1">
 <hyp rank="0" score="3">
-<t score="0" srcidx="0-6" type="hiero">
- <t score="0" srcidx="0-6" type="hiero">
-  <t score="1" srcidx="0-6" type="hiero">
-   <t score="0" srcidx="0" type="terminal">a</t>
-   <t score="1" srcidx="6-6" type="phrase">
-    <t score="0" srcidx="6" type="terminal">f</t>
+<t score="0" srcidx="0-8" type="hiero">
+ <t score="0" srcidx="0-8" type="hiero">
+  <t score="0" srcidx="0-8" type="hiero">
+   <t score="0" srcidx="" type="terminal">&lt;s&gt;</t>
+   <t score="1" srcidx="1-7" type="hiero">
+    <t score="0" srcidx="1" type="terminal">a</t>
+    <t score="1" srcidx="7-7" type="phrase">
+     <t score="0" srcidx="7" type="terminal">f</t>
+    </t>
+    <t score="1" srcidx="2-5" type="phrase">
+     <t score="0" srcidx="2-3,5" type="terminal">b</t>
+    </t>
+    <t score="0" srcidx="6" type="terminal">e</t>
    </t>
-   <t score="1" srcidx="1-4" type="phrase">
-    <t score="0" srcidx="1-2,4" type="terminal">b</t>
-   </t>
-   <t score="0" srcidx="5" type="terminal">e</t>
+   <t score="0" srcidx="" type="terminal">&lt;/s&gt;</t>
   </t>
  </t>
 </t>

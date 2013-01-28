@@ -9,6 +9,9 @@
 #include <vector>
 #include <boost/program_options.hpp>
 #include <boost/program_options/variables_map.hpp>
+#include <boost/spirit/include/classic_parser_id.hpp>
+#include <boost/spirit/include/classic_tree_to_xml.hpp>
+
 #include "scorer.h"
 #include "hg.h"
 #include "ff_factory.h"
@@ -362,14 +365,14 @@ void DumpKBest(std::string const& suffix,const int sent_id, const Hypergraph& fo
 
     // <seg id="0" key1=value1 key2=value2 .. keyn=valuen>
     ko.get() << "<seg id=\"" << sent_id << "\">\n";
-    // <src> <tok id="0">blah</tok> </src>; tok will not be inserted
+    // <src> <tok id="0">blah</tok> </src>
     ko.get() << "<src>\n";
     Lattice tok;
     LatticeTools::ConvertTextOrPLF(to_translate, &tok);
     std::vector<WordID> tok_sent;
     LatticeTools::ConvertLatticeToSentence(tok, &tok_sent);
     for (std::vector<WordID>::size_type ti = 0; ti != tok_sent.size(); ++ti)
-      ko.get() << " <tok id=\"" << ti << "\">" << TD::Convert(tok_sent[ti]) << "</tok>\n";
+      ko.get() << " <tok id=\"" << ti << "\">" << boost::spirit::classic::xml::encode(TD::Convert(tok_sent[ti])) << "</tok>\n";
     ko.get() << "</src>\n";
     if (!unique)
       kbest_xml<KBest::NoFilter<std::vector<WordID> > >(sent_id,forest,k,ko.get(),oderiv.get());
