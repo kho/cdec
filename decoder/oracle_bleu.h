@@ -285,7 +285,7 @@ struct OracleBleu {
   }
 
   template <class Filter>
-  void kbest_xml(int sent_id, Hypergraph const& forest, int k,
+  void kbest_xml(int sent_id, Hypergraph const& forest, int k, bool strip_soseos,
                  std::ostream &kbest_out=std::cout, std::ostream &deriv_out=std::cerr) {
     using namespace std;
     using namespace boost;
@@ -300,7 +300,7 @@ struct OracleBleu {
       std::ostringstream xml_str;
       // <hyp rank="0" score="4.5">
       xml_str << "<hyp rank=\"" << i << "\" score=\"" << log(d->score) << "\">\n";
-      kbest.derivation_xml(xml_str, *d);
+      kbest.derivation_xml(xml_str, *d, strip_soseos);
       // </hyp>
       xml_str << "</hyp>\n";
       kbest_xml_strs.push_back(xml_str.str());
@@ -351,10 +351,14 @@ void DumpKBest(std::string const& suffix,const int sent_id, const Hypergraph& fo
     DumpKBest(sent_id, forest, k, unique, kbest_string_stream.str(), "-");
   }
 
-  void DumpKBestXML(const int sent_id, const std::string &to_translate, const Hypergraph& forest, const int k, const bool unique, std::string const &kbest_out_filename_, std::string const &deriv_out_filename_) {
+  void DumpKBestXML(const int sent_id, const std::string &to_translate, const Hypergraph& forest, const int k, const bool unique, bool strip_soseos, std::string const &kbest_out_filename_, std::string const &deriv_out_filename_) {
 
     WriteFile ko(kbest_out_filename_);
-    std::cerr << "Output kbest in XML to " << kbest_out_filename_ <<std::endl;
+    if (strip_soseos)
+    std::cerr << "Output kbest in XML to " << kbest_out_filename_
+              << "; stripping <s> and </s>" << std::endl;
+    else
+      std::cerr << "Output kbest in XML to " << kbest_out_filename_ <<std::endl;
     std::ostringstream sderiv;
     sderiv << deriv_out_filename_;
     if (show_derivation) {
@@ -371,13 +375,18 @@ void DumpKBest(std::string const& suffix,const int sent_id, const Hypergraph& fo
     LatticeTools::ConvertTextOrPLF(to_translate, &tok);
     std::vector<WordID> tok_sent;
     LatticeTools::ConvertLatticeToSentence(tok, &tok_sent);
-    for (std::vector<WordID>::size_type ti = 0; ti != tok_sent.size(); ++ti)
-      ko.get() << " <tok id=\"" << ti << "\">" << boost::spirit::classic::xml::encode(TD::Convert(tok_sent[ti])) << "</tok>\n";
+    // When stripping soseos, make sure there is sos and eos in the input
+    if (strip_soseos)
+      assert(tok_sent.empty() || (tok_sent.front() == TD::Convert("<s>") && tok_sent.back() == TD::Convert("</s>")));
+    for (std::vector<WordID>::size_type ti = 0; ti != tok_sent.size(); ++ti) {
+      if (strip_soseos && (ti == 0 || ti == tok_sent.size() - 1)) continue;
+      ko.get() << " <tok id=\"" << (strip_soseos ? ti - 1 : ti) << "\">" << boost::spirit::classic::xml::encode(TD::Convert(tok_sent[ti])) << "</tok>\n";
+    }
     ko.get() << "</src>\n";
     if (!unique)
-      kbest_xml<KBest::NoFilter<std::vector<WordID> > >(sent_id,forest,k,ko.get(),oderiv.get());
+      kbest_xml<KBest::NoFilter<std::vector<WordID> > >(sent_id, forest, k, strip_soseos, ko.get(), oderiv.get());
     else {
-      kbest_xml<KBest::FilterUnique>(sent_id,forest,k,ko.get(),oderiv.get());
+      kbest_xml<KBest::FilterUnique>(sent_id, forest, k, strip_soseos, ko.get(), oderiv.get());
     }
     ko.get() << "</nbest>\n</seg>\n";
   }

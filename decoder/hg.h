@@ -141,10 +141,11 @@ namespace HG {
       if (indent) o<<"\n";
     }
 
-    // Writes a derivation in IBM format (XML)
+    // Writes a derivation in IBM format (XML); returns true iff output is written during the call
     template <class EdgeRecurse, class TEdgeHandle>
-    void derivation_xml_stream(const EdgeRecurse &re, const TEdgeHandle &eh,
-                               std::ostream &output, bool indent=true, int depth=0) const {
+    bool derivation_xml_stream(const EdgeRecurse &re, const TEdgeHandle &eh, int src_len,
+                               std::ostream &output, bool strip_soseos,
+                               bool indent=true, int depth=0) const {
       // Adjust the offset of alignment points
       std::map<int, int> adjust;
       unsigned offset = 0;
@@ -168,14 +169,24 @@ namespace HG {
       typedef std::map<int, std::set<int> > TgtSrcMap;
       TgtSrcMap tgt_src;
       const std::vector<AlignmentPoint> &als = rule_->als();
-      for (std::vector<AlignmentPoint>::const_iterator it = als.begin();
-           it != als.end(); ++it)
-        tgt_src[it->t_].insert(adjust[it->s_]);
+      if (strip_soseos) {
+        for (std::vector<AlignmentPoint>::const_iterator it = als.begin();
+             it != als.end(); ++it)
+          tgt_src[it->t_].insert(adjust[it->s_] - 1);
+      }
+      else {
+        for (std::vector<AlignmentPoint>::const_iterator it = als.begin();
+             it != als.end(); ++it)
+          tgt_src[it->t_].insert(adjust[it->s_]);
+      }
 
-      // Decide type; if there is no non-termnials, call it a
+      // Decide type; if there is no non-terminal, call it a
       // `phrase'; otherwise call it a `hiero'.
       std::string type = "phrase";
       const std::vector<WordID> &e = rule_->e();
+      // When strip_soseos, If the e side is a single <s> or </s>, the whole rule is stripped
+      if (strip_soseos && e.size() == 1 && (e.front() == TD::Convert("<s>") || e.front() == TD::Convert("</s>")))
+        return false;
       for (std::vector<WordID>::const_iterator eit = e.begin();
            eit != e.end(); ++eit) {
         if (*eit < 1) {
@@ -184,15 +195,8 @@ namespace HG {
         }
       }
 
-      // Write the opening, like <t score="2.5" srcidx="0,2-4" type="hiero">
-      if (indent) for (int i = 0; i < depth; ++i) output << ' ';
-      output << "<t score=\"" << edge_prob_.v_ << "\" srcidx=\"";
-      if (i_ == j_ - 1)
-        output << i_;
-      else
-        output << i_ << "-" << j_ - 1;
-      output<< "\" type=\"" << type << "\">\n";
-
+      bool written = false;
+      std::ostringstream part;
       // For each e symbol in the rule, either recurse or output the terminal
       for (std::vector<WordID>::size_type ei = 0; ei != e.size(); ++ei) {
         WordID c = e[ei];
@@ -201,12 +205,16 @@ namespace HG {
           TEdgeHandle child = re(tail_nodes_[c], c, eh);
           Edge const *child_ptr = child;
           if (child_ptr)                // TODO: what happens if child_ptr is null?
-            child_ptr->derivation_xml_stream(re, child, output, indent, depth+1);
+            written = child_ptr->derivation_xml_stream(re, child, src_len, part, strip_soseos, indent, depth+1) || written;
         } else {                        // terminal
-          if (indent) for (int j = 0; j < depth; ++j) output << ' ';
-          output << ' ';
+          // TODO: in the extremely rare (and incorrect) case where
+          // <s> or </s> is put inside the output, they should be kept intact
+          if (strip_soseos && (c == TD::Convert("<s>") || c == TD::Convert("</s>")))
+            continue;
+          if (indent) for (int j = 0; j < depth; ++j) part << ' ';
+          part << ' ';
           // Opening
-          output << "<t score=\"0\" srcidx=\"";
+          part << "<t score=\"0\" srcidx=\"";
           // Format srcidx
           std::ostringstream srcidx_str;
           bool first = true;
@@ -240,12 +248,39 @@ namespace HG {
           }
 
           // The rest
-          output << srcidx_str.str() << "\" type=\"terminal\">" << boost::spirit::classic::xml::encode(TD::Convert(c)) << "</t>\n";
+          part << srcidx_str.str() << "\" type=\"terminal\">" << boost::spirit::classic::xml::encode(TD::Convert(c)) << "</t>\n";
+          written = true;
         }
       }
+
+      // Nothing is written to part because of stripped <s> or </s>
+      if (strip_soseos && !written)
+        return false;
+
+      // Write the opening, e.g. <t score="2.5" srcidx="0,2-4" type="hiero">
+      if (indent) for (int i = 0; i < depth; ++i) output << ' ';
+      output << "<t score=\"" << edge_prob_.v_ << "\" srcidx=\"";
+
+      int left = i_, right = j_;
+      if (strip_soseos) {
+        if (left)
+          left -= 1;
+        if (right == src_len)
+          right -= 2;
+        else
+          right -= 1;
+      }
+      if (left == right - 1)
+        output << left;
+      else
+        output << left << "-" << right - 1;
+      output << "\" type=\"" << type << "\">\n";
+      // Write the body
+      output << part.str();
       // Write the closing </t>
       if (indent) for (int i = 0; i < depth; ++i) output << ' ';
       output << "</t>\n";
+      return true;
     }
   };
 

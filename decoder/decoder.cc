@@ -324,6 +324,7 @@ struct DecoderImpl {
   bool kbest;
   bool unique_kbest;
   bool xml_kbest;
+  bool xml_strip_soseos;
   bool get_oracle_forest;
   boost::shared_ptr<WriteFile> extract_file;
   int combine_size;
@@ -456,6 +457,7 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
         ("combine_size,C",po::value<int>()->default_value(1), "When option -G is used, process this many sentence pairs before writing the gradient (1=emit after every sentence pair)")
         ("forest_output,O",po::value<string>(),"Directory to write forests to")
       ("xml", "Output k-best in XML")
+      ("xml_strip_soseos", "Strip <s> and </s> in XML output (must be combined with --xml; input must contain <s> and </s>)")
     ("remove_intersected_rule_annotations", "After forced decoding is completed, remove nonterminal annotations (i.e., the source side spans)")
 	//@author ferhanture
     ("rules_dir",po::value<string>(),"DISCOURSE FEATURE: Directory to read rule frequency of each document from")
@@ -742,6 +744,7 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
   kbest = conf.count("k_best");
   unique_kbest = conf.count("unique_k_best");
   xml_kbest = conf.count("xml");
+  xml_strip_soseos = conf.count("xml_strip_soseos");
   get_oracle_forest = conf.count("get_oracle_forest");
   oracle.show_derivation=conf.count("show_derivations");
   remove_intersected_rule_annotations = conf.count("remove_intersected_rule_annotations");
@@ -1061,7 +1064,7 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
       //TODO: does this work properly?
       const string deriv_fname = conf.count("show_derivations") ? str("show_derivations",conf) : "-";
       if (xml_kbest)
-        oracle.DumpKBestXML(sent_id, to_translate, forest, conf["k_best"].as<int>(), unique_kbest, "-", deriv_fname);
+        oracle.DumpKBestXML(sent_id, to_translate, forest, conf["k_best"].as<int>(), unique_kbest, xml_strip_soseos, "-", deriv_fname);
       else
         oracle.DumpKBest(sent_id, forest, conf["k_best"].as<int>(), unique_kbest,"-", deriv_fname);
     } else if (csplit_output_plf) {
