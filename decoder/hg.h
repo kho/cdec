@@ -225,7 +225,7 @@ namespace HG {
             for (std::set<int>::const_iterator sit = srcidx_set->second.begin();
                  sit != srcidx_set->second.end(); ++sit) {
               int cur = *sit;
-              if (last + 1 == cur)
+              if (last + len + 1 == cur)
                 ++len;
               else {
                 if (last >= 0) {

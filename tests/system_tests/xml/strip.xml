@@ -7,8 +7,41 @@
  <tok id="4">E</tok>
  <tok id="5">F</tok>
 </src>
-<nbest count="6">
-<hyp rank="0" score="204">
+<nbest count="9">
+<hyp rank="0" score="10199">
+<t score="0" srcidx="0-5" type="hiero">
+ <t score="100" srcidx="0-5" type="hiero">
+  <t score="100" srcidx="0-5" type="hiero">
+   <t score="9999" srcidx="0-5" type="phrase">
+    <t score="0" srcidx="0-2,4-5" type="terminal">a</t>
+   </t>
+  </t>
+ </t>
+</t>
+</hyp>
+<hyp rank="1" score="10009">
+<t score="0" srcidx="0-5" type="hiero">
+ <t score="0" srcidx="0-5" type="hiero">
+  <t score="10" srcidx="0-5" type="hiero">
+   <t score="9999" srcidx="0-5" type="phrase">
+    <t score="0" srcidx="0-2,4-5" type="terminal">a</t>
+   </t>
+  </t>
+ </t>
+</t>
+</hyp>
+<hyp rank="2" score="9999">
+<t score="0" srcidx="0-5" type="hiero">
+ <t score="0" srcidx="0-5" type="hiero">
+  <t score="0" srcidx="0-5" type="hiero">
+   <t score="9999" srcidx="0-5" type="phrase">
+    <t score="0" srcidx="0-2,4-5" type="terminal">a</t>
+   </t>
+  </t>
+ </t>
+</t>
+</hyp>
+<hyp rank="3" score="204">
 <t score="0" srcidx="0-5" type="hiero">
  <t score="100" srcidx="0-5" type="hiero">
   <t score="100" srcidx="0-5" type="hiero">
@@ -27,7 +60,7 @@
  </t>
 </t>
 </hyp>
-<hyp rank="1" score="203">
+<hyp rank="4" score="203">
 <t score="0" srcidx="0-5" type="hiero">
  <t score="100" srcidx="0-5" type="hiero">
   <t score="100" srcidx="0-5" type="hiero">
@@ -47,7 +80,7 @@
  </t>
 </t>
 </hyp>
-<hyp rank="2" score="14">
+<hyp rank="5" score="14">
 <t score="0" srcidx="0-5" type="hiero">
  <t score="0" srcidx="0-5" type="hiero">
   <t score="10" srcidx="0-5" type="hiero">
@@ -66,7 +99,7 @@
  </t>
 </t>
 </hyp>
-<hyp rank="3" score="13">
+<hyp rank="6" score="13">
 <t score="0" srcidx="0-5" type="hiero">
  <t score="0" srcidx="0-5" type="hiero">
   <t score="10" srcidx="0-5" type="hiero">
@@ -86,7 +119,7 @@
  </t>
 </t>
 </hyp>
-<hyp rank="4" score="4">
+<hyp rank="7" score="4">
 <t score="0" srcidx="0-5" type="hiero">
  <t score="0" srcidx="0-5" type="hiero">
   <t score="0" srcidx="0-5" type="hiero">
@@ -105,7 +138,7 @@
  </t>
 </t>
 </hyp>
-<hyp rank="5" score="3">
+<hyp rank="8" score="3">
 <t score="0" srcidx="0-5" type="hiero">
  <t score="0" srcidx="0-5" type="hiero">
   <t score="0" srcidx="0-5" type="hiero">
