@@ -248,7 +248,7 @@ namespace HG {
           }
 
           // The rest
-          part << srcidx_str.str() << "\" type=\"terminal\">" << boost::spirit::classic::xml::encode(TD::Convert(c)) << "</t>\n";
+          part << srcidx_str.str() << "\" type=\"terminal\"> " << boost::spirit::classic::xml::encode(TD::Convert(c)) << " </t>\n";
           written = true;
         }
       }
