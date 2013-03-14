@@ -4,7 +4,6 @@
 #include <iostream>
 #include <string>
 
-#include <boost/scoped_ptr.hpp>
 #include <boost/utility.hpp>
 
 // Define in "conf.h"
@@ -143,21 +142,14 @@ struct Compose : Pipe<Compose<F, G> > {
     F::Register(conf);
     G::Register(conf);
   }
-  // Store `conf` for delayed construction
-  explicit Compose(const Conf &conf) : conf_(conf) {}
+  explicit Compose(const Conf &conf) : f_(conf), g_(conf) {}
   otype Apply(const Input &input, Context *context, itype i) const {
-    LazyInit();
-    typename F::otype t = f_->Apply(input, context, i);
-    return g_->Apply(input, context, t);
+    typename F::otype t = f_.Apply(input, context, i);
+    return g_.Apply(input, context, t);
   }
  private:
-  void LazyInit() const {
-    if (!f_) f_.reset(new F(conf_));
-    if (!g_) g_.reset(new G(conf_));
-  }
-  const Conf &conf_;
-  mutable boost::scoped_ptr<F> f_;
-  mutable boost::scoped_ptr<G> g_;
+  F f_;
+  G g_;
 };
 
 // Unit is just the monadic identity from `T` to `Maybe<T>`
@@ -183,22 +175,16 @@ struct Bind : Pipe<Bind<F, G> > {
     F::Register(conf);
     G::Register(conf);
   }
-  // Store `conf` for delayed construction
-  explicit Bind(const Conf &conf) : conf_(conf) {}
+  explicit Bind(const Conf &conf) : f_(conf), g_(conf) {}
   otype Apply(const Input &input, Context *context, itype i) const {
-    LazyInitF();
-    typename F::otype t = f_->Apply(input, context, i);
+    typename F::otype t = f_.Apply(input, context, i);
     if (t.IsNothing())
       return Nothing<typename G::otype::value_type>();
-    LazyInitG();
-    return g_->Apply(input, context, t.Value());
+    return g_.Apply(input, context, t.Value());
   }
  private:
-  void LazyInitF() const { if (!f_) f_.reset(new F(conf_)); }
-  void LazyInitG() const { if (!g_) g_.reset(new G(conf_)); }
-  const Conf &conf_;
-  mutable boost::scoped_ptr<F> f_;
-  mutable boost::scoped_ptr<G> g_;
+  F f_;
+  G g_;
 };
 
 // Conditional branching; `If` is predicate, i.e. `If::otype` should
@@ -215,26 +201,14 @@ struct Cond : Pipe<Cond<If, Then, Else> > {
     Then::Register(conf);
     Else::Register(conf);
   }
-  explicit Cond(const Conf &conf) : conf_(conf) {}
+  explicit Cond(const Conf &conf) : if_(conf), then_(conf), else_(conf) {}
   otype Apply(const Input &input, Context *context, itype i) const {
-    LazyInitIf();
-    bool pred = if_->Apply(input, context, i);
-    if (pred) {
-      LazyInitThen();
-      return then_->Apply(input, context, i);
-    } else {
-      LazyInitElse();
-      return else_->Apply(input, context, i);
-    }
+    return if_.Apply(input, context, i) ? then_.Apply(input, context, i) : else_.Apply(input, context, i);
   }
  private:
-  void LazyInitIf() const { if (!if_) if_.reset(new If(conf_)); }
-  void LazyInitThen() const { if (!then_) then_.reset(new Then(conf_)); }
-  void LazyInitElse() const { if (!else_) else_.reset(new Else(conf_)); }
-  const Conf &conf_;
-  mutable boost::scoped_ptr<If> if_;
-  mutable boost::scoped_ptr<Then> then_;
-  mutable boost::scoped_ptr<Else> else_;
+  If if_;
+  Then then_;
+  Else else_;
 };
 
 // Repeated application of a integer parameterized function `F`,

@@ -1,5 +1,6 @@
 #include "pipeline.h"
 
+#include <cassert>
 #include <iostream>
 #include <string>
 #include <sstream>
@@ -72,30 +73,7 @@ struct IsZero : Pipe<IsZero> {
   otype Apply(const Input &input, Context *context, itype arg) const { return arg == 0; }
 };
 
-struct GcdStep : Pipe<GcdStep> {
-  typedef IntPair itype;
-  typedef IntPair otype;
-  static void Register(Conf *conf) {}
-  explicit GcdStep(const Conf &conf) {}
-  otype Apply(const Input &input, Context *context, itype arg) const {
-    return itype(arg.b % arg.a, arg.a);
-  }
-};
-
 typedef First::COMP(IsZero) FirstIsZero;
-struct Gcd : Cond<FirstIsZero, Second, GcdStep::COMP(Gcd)> {
-  typedef Cond<FirstIsZero, Second, GcdStep::COMP(Gcd)> base;
-  static void Register(Conf *conf) {
-    if (!registered_) {
-      registered_ = true;
-      base::Register(conf);
-    }
-  }
-  static bool registered_;
-  explicit Gcd(const Conf &conf) : base(conf) {}
-};
-
-bool Gcd::registered_ = false;
 
 struct IsOrdered : Pipe<IsOrdered> {
   typedef IntPair itype;
@@ -118,8 +96,6 @@ struct MkNothing : Pipe<MkNothing<T, S> > {
   }
 };
 
-typedef Cond<IsOrdered, Gcd::COMP(Unit<int>), MkNothing<IntPair, int> > MaybeGcd;
-
 template <class F>
 typename F::otype run(typename F::itype arg) {
   Conf conf;
@@ -127,11 +103,6 @@ typename F::otype run(typename F::itype arg) {
   F::Register(&conf);
   F f(conf);
   return f.Apply(Input(), &context, arg);
-}
-
-int gcd(int m, int n) {
-  if (m) return gcd(n % m, m);
-  return n;
 }
 
 struct Add1 : Pipe<Add1> {
@@ -187,14 +158,17 @@ struct AddNTop60 : Pipe<AddNTop60<n> > {
   }
 };
 
+// The following should result in compile error because of recursive call.
+// struct Rec : Cond<IsZero, Add1, Rec> {
+//   typedef Cond<IsZero, Add1, Rec> base;
+//   Rec(const Conf &conf) : base(conf) {}
+// };
+
 void TestPipe() {
   assert(run<FirstIsZero>(IntPair(0, 1)));
   assert(!run<FirstIsZero>(IntPair(1, 0)));
   int a[] = {1, 2, 3, 4, 5, 11, 22, 33, 44};
   int n = sizeof(a) / sizeof(int);
-  for (int i = 0; i < n; ++i)
-    for (int j = 0; j < n; ++j)
-      assert(run<Gcd>(IntPair(a[i], a[j])) == gcd(a[i], a[j]));
   for (int i = 0; i < n; ++i) {
     assert(run<Add1::ON(IsOdd)::COMP(IsEven)>(a[i]));
     assert(run<Add1::ON(IsEven)::COMP(IsOdd)>(a[i]));
@@ -220,12 +194,6 @@ void TestPipe() {
     assert(x.IsNothing());
   } while (false);
 
-  for (int i = 0; i < n; ++i)
-    for (int j = 0; j < n; ++j)
-      if (a[i] <= a[j])
-        assert(run<MaybeGcd>(IntPair(a[i], a[j])) == Just(gcd(a[i], a[j])));
-      else
-        assert(run<MaybeGcd>(IntPair(a[i], a[j])).IsNothing());
   for (int i = 0; i < n; ++i) {
     Maybe<int> t1, t2;
 
@@ -238,13 +206,6 @@ void TestPipe() {
     t1 = Nothing<int>();
     t2 = run<MkNothing<int, int>::BIND(Add1::COMP(Unit<int>)::WHEN(IsOdd))>(a[i]);
     assert(t1 == t2);
-
-    for (int j = 0; j < n; ++j) {
-      if (a[i] <= a[j]) t1 = Just(gcd(a[i], a[j]) * 2 + 1);
-      else t1 = Nothing<int>();
-      t2 = run<MaybeGcd::BIND(Times2::COMP(Unit<int>))::BIND(Add1::COMP(Unit<int>))>(IntPair(a[i], a[j]));
-      assert(t1 == t2);
-    }
   }
   cerr << "TestFunc: pass" << endl;
 }
