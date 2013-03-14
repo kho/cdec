@@ -6,11 +6,16 @@
 
 #include <boost/utility.hpp>
 
-// Define in "conf.h"
-struct Conf;
-// Defined in "context.h".
+namespace boost { namespace program_options {
+struct options_description;
+struct variables_map;
+} // namespace program_options
+} // namespace boost
+
+typedef boost::program_options::options_description OptDesc;
+typedef boost::program_options::variables_map VarMap;
+
 struct Context;
-// Defined in "input.h".
 struct Input;
 
 namespace pipeline {
@@ -127,8 +132,8 @@ template <class T>
 struct Identity : Pipe<Identity<T> > {
   typedef T itype;
   typedef T otype;
-  static void Register(Conf *) {}
-  explicit Identity(const Conf &) {}
+  static void Register(OptDesc *) {}
+  explicit Identity(const VarMap &) {}
   T Apply(const Input &, Context *, itype i) const { return i; }
 };
 
@@ -138,11 +143,11 @@ template <class F, class G>
 struct Compose : Pipe<Compose<F, G> > {
   typedef typename F::itype itype;
   typedef typename G::otype otype;
-  static void Register(Conf *conf) {
+  static void Register(OptDesc *conf) {
     F::Register(conf);
     G::Register(conf);
   }
-  explicit Compose(const Conf &conf) : f_(conf), g_(conf) {}
+  explicit Compose(const VarMap &conf) : f_(conf), g_(conf) {}
   otype Apply(const Input &input, Context *context, itype i) const {
     typename F::otype t = f_.Apply(input, context, i);
     return g_.Apply(input, context, t);
@@ -157,8 +162,8 @@ template <class T>
 struct Unit : Pipe<Unit<T> > {
   typedef T itype;
   typedef Maybe<T> otype;
-  static void Register(Conf *) {}
-  explicit Unit(const Conf &) {}
+  static void Register(OptDesc *) {}
+  explicit Unit(const VarMap &) {}
   otype Apply(const Input &, Context *, itype i) const { return Just(i); }
 };
 
@@ -171,11 +176,11 @@ template <class F, class G>
 struct Bind : Pipe<Bind<F, G> > {
   typedef typename F::itype itype;
   typedef typename G::otype otype;
-  static void Register(Conf *conf) {
+  static void Register(OptDesc *conf) {
     F::Register(conf);
     G::Register(conf);
   }
-  explicit Bind(const Conf &conf) : f_(conf), g_(conf) {}
+  explicit Bind(const VarMap &conf) : f_(conf), g_(conf) {}
   otype Apply(const Input &input, Context *context, itype i) const {
     typename F::otype t = f_.Apply(input, context, i);
     if (t.IsNothing())
@@ -196,12 +201,12 @@ template <class If, class Then, class Else>
 struct Cond : Pipe<Cond<If, Then, Else> > {
   typedef typename Then::itype itype;
   typedef typename Then::otype otype;
-  static void Register(Conf *conf) {
+  static void Register(OptDesc *conf) {
     If::Register(conf);
     Then::Register(conf);
     Else::Register(conf);
   }
-  explicit Cond(const Conf &conf) : if_(conf), then_(conf), else_(conf) {}
+  explicit Cond(const VarMap &conf) : if_(conf), then_(conf), else_(conf) {}
   otype Apply(const Input &input, Context *context, itype i) const {
     return if_.Apply(input, context, i) ? then_.Apply(input, context, i) : else_.Apply(input, context, i);
   }
@@ -218,14 +223,14 @@ template <int n, template <int> class F>
 struct Repeat : Compose<Repeat<n - 1, F>, F<n> > {
   typedef typename F<n>::itype itype;
   typedef typename F<n>::otype otype;
-  explicit Repeat(const Conf &conf) : Compose<Repeat<n - 1, F>, F<n> >(conf) {}
+  explicit Repeat(const VarMap &conf) : Compose<Repeat<n - 1, F>, F<n> >(conf) {}
 };
 
 template <template <int> class F>
 struct Repeat<0, F> : Identity<typename F<0>::itype> {
   typedef typename F<0>::itype itype;
   typedef typename F<0>::otype otype;
-  explicit Repeat(const Conf &conf) : Identity<typename F<0>::itype>(conf) {}
+  explicit Repeat(const VarMap &conf) : Identity<typename F<0>::itype>(conf) {}
 };
 
 // Repeated application of a integer parameterized monadic function
@@ -234,14 +239,14 @@ template <int n, template <int> class F>
 struct Loop : Bind<Loop<n - 1, F>, F<n> > {
   typedef typename F<n>::itype itype;
   typedef typename F<n>::otype otype;
-  explicit Loop(const Conf &conf) : Bind<Loop<n - 1, F>, F<n> >(conf) {}
+  explicit Loop(const VarMap &conf) : Bind<Loop<n - 1, F>, F<n> >(conf) {}
 };
 
 template <template <int> class F>
 struct Loop<0, F> : Unit<typename F<0>::itype> {
   typedef typename F<0>::itype itype;
   typedef typename F<0>::otype otype;
-  explicit Loop(const Conf &conf) : Unit<typename F<0>::itype>(conf) {}
+  explicit Loop(const VarMap &conf) : Unit<typename F<0>::itype>(conf) {}
 };
 
 } // namespace pipeline

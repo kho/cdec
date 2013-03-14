@@ -34,7 +34,11 @@ void TestMaybe() {
 }
 
 // Mock input and context
-struct Conf {};
+namespace boost { namespace program_options {
+struct options_description {};
+struct variables_map {};
+} }
+
 struct Input {};
 struct Context {};
 
@@ -52,24 +56,24 @@ struct IntPair {
 struct First : Pipe<First> {
   typedef IntPair itype;
   typedef int otype;
-  static void Register(Conf *) {}
-  explicit First(const Conf &) {}
+  static void Register(OptDesc *) {}
+  explicit First(const VarMap &) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg.a; }
 };
 
 struct Second : Pipe<Second> {
   typedef IntPair itype;
   typedef int otype;
-  static void Register(Conf *) {}
-  explicit Second(const Conf &) {}
+  static void Register(OptDesc *) {}
+  explicit Second(const VarMap &) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg.b; }
 };
 
 struct IsZero : Pipe<IsZero> {
   typedef int itype;
   typedef bool otype;
-  static void Register(Conf *conf) {}
-  explicit IsZero(const Conf &conf) {}
+  static void Register(OptDesc *conf) {}
+  explicit IsZero(const VarMap &conf) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg == 0; }
 };
 
@@ -78,8 +82,8 @@ typedef First::COMP(IsZero) FirstIsZero;
 struct IsOrdered : Pipe<IsOrdered> {
   typedef IntPair itype;
   typedef bool otype;
-  static void Register(Conf *) {}
-  explicit IsOrdered(const Conf &) {}
+  static void Register(OptDesc *) {}
+  explicit IsOrdered(const VarMap &) {}
   otype Apply(const Input &input, Context *context, itype arg) const {
     return arg.a <= arg.b;
   }
@@ -89,8 +93,8 @@ template <class T, class S>
 struct MkNothing : Pipe<MkNothing<T, S> > {
   typedef T itype;
   typedef Maybe<S> otype;
-  static void Register(Conf *) {}
-  explicit MkNothing(const Conf &) {}
+  static void Register(OptDesc *) {}
+  explicit MkNothing(const VarMap &) {}
   otype Apply(const Input &input, Context *context, itype arg) const {
     return Nothing<S>();
   }
@@ -98,42 +102,43 @@ struct MkNothing : Pipe<MkNothing<T, S> > {
 
 template <class F>
 typename F::otype run(typename F::itype arg) {
-  Conf conf;
+  OptDesc opts;
+  VarMap vm;
   Context context;
-  F::Register(&conf);
-  F f(conf);
+  F::Register(&opts);
+  F f(vm);
   return f.Apply(Input(), &context, arg);
 }
 
 struct Add1 : Pipe<Add1> {
   typedef int itype;
   typedef int otype;
-  static void Register(Conf *conf) {}
-  Add1(const Conf &conf) {}
+  static void Register(OptDesc *conf) {}
+  Add1(const VarMap &conf) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg + 1; }
 };
 
 struct Times2 : Pipe<Times2> {
   typedef int itype;
   typedef int otype;
-  static void Register(Conf *conf) {}
-  Times2(const Conf &conf) {}
+  static void Register(OptDesc *conf) {}
+  Times2(const VarMap &conf) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg * 2; }
 };
 
 struct IsEven : Pipe<IsEven> {
   typedef int itype;
   typedef bool otype;
-  static void Register(Conf *conf) {}
-  IsEven(const Conf &conf) {}
+  static void Register(OptDesc *conf) {}
+  IsEven(const VarMap &conf) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg % 2 == 0; }
 };
 
 struct IsOdd : Pipe<IsOdd> {
   typedef int itype;
   typedef bool otype;
-  static void Register(Conf *conf) {}
-  IsOdd(const Conf &conf) {}
+  static void Register(OptDesc *conf) {}
+  IsOdd(const VarMap &conf) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg % 2 != 0; }
 };
 
@@ -141,8 +146,8 @@ template <int n>
 struct AddN : Pipe<AddN<n> > {
   typedef int itype;
   typedef int otype;
-  static void Register(Conf *conf) {}
-  AddN(const Conf &conf) {}
+  static void Register(OptDesc *conf) {}
+  AddN(const VarMap &conf) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg + n; }
 };
 
@@ -150,8 +155,8 @@ template <int n>
 struct AddNTop60 : Pipe<AddNTop60<n> > {
   typedef int itype;
   typedef Maybe<int> otype;
-  static void Register(Conf *conf) {}
-  AddNTop60(const Conf &conf) {}
+  static void Register(OptDesc *conf) {}
+  AddNTop60(const VarMap &conf) {}
   otype Apply(const Input &input, Context *context, itype arg) const {
     if (arg + n < 60) return Just(arg + n);
     else return Nothing<int>();
@@ -161,7 +166,7 @@ struct AddNTop60 : Pipe<AddNTop60<n> > {
 // The following should result in compile error because of recursive call.
 // struct Rec : Cond<IsZero, Add1, Rec> {
 //   typedef Cond<IsZero, Add1, Rec> base;
-//   Rec(const Conf &conf) : base(conf) {}
+//   Rec(const VarMap &conf) : base(conf) {}
 // };
 
 void TestPipe() {
