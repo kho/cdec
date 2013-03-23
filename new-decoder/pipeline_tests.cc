@@ -57,7 +57,7 @@ struct First : Pipe<First> {
   typedef IntPair itype;
   typedef int otype;
   static void Register(OptDesc *) {}
-  explicit First(const VarMap &) {}
+  explicit First(const VarMap &, Context *) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg.a; }
 };
 
@@ -65,7 +65,7 @@ struct Second : Pipe<Second> {
   typedef IntPair itype;
   typedef int otype;
   static void Register(OptDesc *) {}
-  explicit Second(const VarMap &) {}
+  explicit Second(const VarMap &, Context *) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg.b; }
 };
 
@@ -73,7 +73,7 @@ struct IsZero : Pipe<IsZero> {
   typedef int itype;
   typedef bool otype;
   static void Register(OptDesc *conf) {}
-  explicit IsZero(const VarMap &conf) {}
+  explicit IsZero(const VarMap &conf, Context *context) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg == 0; }
 };
 
@@ -83,7 +83,7 @@ struct IsOrdered : Pipe<IsOrdered> {
   typedef IntPair itype;
   typedef bool otype;
   static void Register(OptDesc *) {}
-  explicit IsOrdered(const VarMap &) {}
+  explicit IsOrdered(const VarMap &, Context *) {}
   otype Apply(const Input &input, Context *context, itype arg) const {
     return arg.a <= arg.b;
   }
@@ -94,7 +94,7 @@ struct MkNothing : Pipe<MkNothing<T, S> > {
   typedef T itype;
   typedef Maybe<S> otype;
   static void Register(OptDesc *) {}
-  explicit MkNothing(const VarMap &) {}
+  explicit MkNothing(const VarMap &, Context *) {}
   otype Apply(const Input &input, Context *context, itype arg) const {
     return Nothing<S>();
   }
@@ -106,7 +106,7 @@ typename F::otype run(typename F::itype arg) {
   VarMap vm;
   Context context;
   F::Register(&opts);
-  F f(vm);
+  F f(vm, &context);
   return f.Apply(Input(), &context, arg);
 }
 
@@ -114,7 +114,7 @@ struct Add1 : Pipe<Add1> {
   typedef int itype;
   typedef int otype;
   static void Register(OptDesc *conf) {}
-  Add1(const VarMap &conf) {}
+  Add1(const VarMap &conf, Context *context) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg + 1; }
 };
 
@@ -122,7 +122,7 @@ struct Times2 : Pipe<Times2> {
   typedef int itype;
   typedef int otype;
   static void Register(OptDesc *conf) {}
-  Times2(const VarMap &conf) {}
+  Times2(const VarMap &conf, Context *context) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg * 2; }
 };
 
@@ -130,7 +130,7 @@ struct IsEven : Pipe<IsEven> {
   typedef int itype;
   typedef bool otype;
   static void Register(OptDesc *conf) {}
-  IsEven(const VarMap &conf) {}
+  IsEven(const VarMap &conf, Context *context) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg % 2 == 0; }
 };
 
@@ -138,7 +138,7 @@ struct IsOdd : Pipe<IsOdd> {
   typedef int itype;
   typedef bool otype;
   static void Register(OptDesc *conf) {}
-  IsOdd(const VarMap &conf) {}
+  IsOdd(const VarMap &conf, Context *context) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg % 2 != 0; }
 };
 
@@ -147,7 +147,7 @@ struct AddN : Pipe<AddN<n> > {
   typedef int itype;
   typedef int otype;
   static void Register(OptDesc *conf) {}
-  AddN(const VarMap &conf) {}
+  AddN(const VarMap &conf, Context *context) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg + n; }
 };
 
@@ -156,7 +156,7 @@ struct AddNTop60 : Pipe<AddNTop60<n> > {
   typedef int itype;
   typedef Maybe<int> otype;
   static void Register(OptDesc *conf) {}
-  AddNTop60(const VarMap &conf) {}
+  AddNTop60(const VarMap &conf, Context *context) {}
   otype Apply(const Input &input, Context *context, itype arg) const {
     if (arg + n < 60) return Just(arg + n);
     else return Nothing<int>();
@@ -166,7 +166,7 @@ struct AddNTop60 : Pipe<AddNTop60<n> > {
 // The following should result in compile error because of recursive call.
 // struct Rec : Cond<IsZero, Add1, Rec> {
 //   typedef Cond<IsZero, Add1, Rec> base;
-//   Rec(const VarMap &conf) : base(conf) {}
+//   Rec(const VarMap &conf, Context *context) : base(conf) {}
 // };
 
 void TestPipe() {

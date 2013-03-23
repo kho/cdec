@@ -133,7 +133,7 @@ struct Identity : Pipe<Identity<T> > {
   typedef T itype;
   typedef T otype;
   static void Register(OptDesc *) {}
-  explicit Identity(const VarMap &) {}
+  explicit Identity(const VarMap &, Context *) {}
   T Apply(const Input &, Context *, itype i) const { return i; }
 };
 
@@ -147,7 +147,7 @@ struct Compose : Pipe<Compose<F, G> > {
     F::Register(conf);
     G::Register(conf);
   }
-  explicit Compose(const VarMap &conf) : f_(conf), g_(conf) {}
+  explicit Compose(const VarMap &conf, Context *context) : f_(conf, context), g_(conf, context) {}
   otype Apply(const Input &input, Context *context, itype i) const {
     typename F::otype t = f_.Apply(input, context, i);
     return g_.Apply(input, context, t);
@@ -163,7 +163,7 @@ struct Unit : Pipe<Unit<T> > {
   typedef T itype;
   typedef Maybe<T> otype;
   static void Register(OptDesc *) {}
-  explicit Unit(const VarMap &) {}
+  explicit Unit(const VarMap &, Context *) {}
   otype Apply(const Input &, Context *, itype i) const { return Just(i); }
 };
 
@@ -180,7 +180,7 @@ struct Bind : Pipe<Bind<F, G> > {
     F::Register(conf);
     G::Register(conf);
   }
-  explicit Bind(const VarMap &conf) : f_(conf), g_(conf) {}
+  explicit Bind(const VarMap &conf, Context *context) : f_(conf, context), g_(conf, context) {}
   otype Apply(const Input &input, Context *context, itype i) const {
     typename F::otype t = f_.Apply(input, context, i);
     if (t.IsNothing())
@@ -206,7 +206,7 @@ struct Cond : Pipe<Cond<If, Then, Else> > {
     Then::Register(conf);
     Else::Register(conf);
   }
-  explicit Cond(const VarMap &conf) : if_(conf), then_(conf), else_(conf) {}
+  explicit Cond(const VarMap &conf, Context *context) : if_(conf, context), then_(conf, context), else_(conf, context) {}
   otype Apply(const Input &input, Context *context, itype i) const {
     return if_.Apply(input, context, i) ? then_.Apply(input, context, i) : else_.Apply(input, context, i);
   }
@@ -223,14 +223,14 @@ template <int n, template <int> class F>
 struct Repeat : Compose<Repeat<n - 1, F>, F<n> > {
   typedef typename F<n>::itype itype;
   typedef typename F<n>::otype otype;
-  explicit Repeat(const VarMap &conf) : Compose<Repeat<n - 1, F>, F<n> >(conf) {}
+  explicit Repeat(const VarMap &conf, Context *context) : Compose<Repeat<n - 1, F>, F<n> >(conf, context) {}
 };
 
 template <template <int> class F>
 struct Repeat<0, F> : Identity<typename F<0>::itype> {
   typedef typename F<0>::itype itype;
   typedef typename F<0>::otype otype;
-  explicit Repeat(const VarMap &conf) : Identity<typename F<0>::itype>(conf) {}
+  explicit Repeat(const VarMap &conf, Context *context) : Identity<typename F<0>::itype>(conf, context) {}
 };
 
 // Repeated application of a integer parameterized monadic function
@@ -239,14 +239,14 @@ template <int n, template <int> class F>
 struct Loop : Bind<Loop<n - 1, F>, F<n> > {
   typedef typename F<n>::itype itype;
   typedef typename F<n>::otype otype;
-  explicit Loop(const VarMap &conf) : Bind<Loop<n - 1, F>, F<n> >(conf) {}
+  explicit Loop(const VarMap &conf, Context *context) : Bind<Loop<n - 1, F>, F<n> >(conf, context) {}
 };
 
 template <template <int> class F>
 struct Loop<0, F> : Unit<typename F<0>::itype> {
   typedef typename F<0>::itype itype;
   typedef typename F<0>::otype otype;
-  explicit Loop(const VarMap &conf) : Unit<typename F<0>::itype>(conf) {}
+  explicit Loop(const VarMap &conf, Context *context) : Unit<typename F<0>::itype>(conf, context) {}
 };
 
 } // namespace pipeline
