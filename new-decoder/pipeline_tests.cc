@@ -39,8 +39,10 @@ struct options_description {};
 struct variables_map {};
 } }
 
+namespace pipeline {
 struct Input {};
 struct Context {};
+} // namespace pipeline
 
 // Shorter macros
 #define COMP PIPE_COMP
@@ -212,6 +214,13 @@ void TestPipe() {
     t2 = run<MkNothing<int, int>::BIND(Add1::COMP(Unit<int>)::WHEN(IsOdd))>(a[i]);
     assert(t1 == t2);
   }
+
+  do {
+    typedef Lift<Add1> Madd1;
+    Maybe<int> x = run<Madd1>(1), y = Just(2);
+    assert(x == y);
+  } while (false);
+
   cerr << "TestFunc: pass" << endl;
 }
 

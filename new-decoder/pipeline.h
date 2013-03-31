@@ -14,11 +14,10 @@ struct variables_map;
 
 typedef boost::program_options::options_description OptDesc;
 typedef boost::program_options::variables_map VarMap;
+namespace pipeline {
 
 struct Context;
 struct Input;
-
-namespace pipeline {
 
 // Dummy argument
 struct Void {};
@@ -247,6 +246,19 @@ struct Loop<0, F> : Unit<typename F<0>::itype> {
   typedef typename F<0>::itype itype;
   typedef typename F<0>::otype otype;
   explicit Loop(const VarMap &conf, Context *context) : Unit<typename F<0>::itype>(conf, context) {}
+};
+
+template <class F>
+struct Lift : Pipe<Lift<F> > {
+  typedef typename F::itype itype;
+  typedef Maybe<typename F::otype> otype;
+  static void Register(OptDesc *conf) { F::Register(conf); }
+  explicit Lift(const VarMap &conf, Context *context) : f_(conf, context) {}
+  otype Apply(const Input &input, Context *context, itype arg) const {
+    return Just(f_.Apply(input, context, arg));
+  }
+ private:
+  F f_;
 };
 
 } // namespace pipeline
