@@ -58,13 +58,13 @@ struct ConstrainForestStage : Pipe<ConstrainForestStage> {
 };
 
 struct OutputSentStage : Pipe<OutputSentStage> {
-  typedef Hypergraph * itype;
+  typedef Maybe<Hypergraph *> itype;
   typedef Maybe<Hypergraph *> otype;
   static void Register(OptDesc */*opts*/) {}
   OutputSentStage(const VarMap &/*conf*/, Context */*context*/) {}
   otype Apply(const Input &/*input*/, Context *context, itype arg) const {
     context->stage = "Output";
-    return Just(arg);
+    return arg;
   }
 };
 

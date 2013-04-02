@@ -92,18 +92,19 @@ StdRefIntersect;
 
 typedef Cond<ShouldWrite1Best, Write1Best, WriteKBest::PIPE_ON(ShouldWriteKBest)> OutputSent;
 
+// Compose intead of bind, because we always want to output, even when there is nothing.
 typedef
   OutputSentStage::
+  PIPE_COMP(OutputSent)::                // OutputSent takes Maybe<Hypergraph *>
   PIPE_BIND(Lift<WriteForestToFile::PIPE_ON(ShouldWriteForest)>)::
   PIPE_BIND(Lift<OptPrintGraphviz>)::
-  PIPE_BIND(Lift<OptJoshuaViz>)::
-  PIPE_COMP(OutputSent)                // OutputSent takes Maybe<Hypergraph *>
+  PIPE_BIND(Lift<OptJoshuaViz>)
 StdOutputSent;
 
 //
 // Standard translation pipeline
 //
-typedef StdInitForest::PIPE_BIND(Std3PassRescore)::PIPE_BIND(StdRefIntersect)::PIPE_BIND(StdOutputSent) StdDecode;
+typedef StdInitForest::PIPE_BIND(Std3PassRescore)::PIPE_BIND(StdRefIntersect)::PIPE_COMP(StdOutputSent) StdDecode;
 
 } // namespace pipeline
 
