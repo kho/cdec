@@ -1,4 +1,4 @@
-AC_INIT([cdec],[2013-01-20])
+AC_INIT([cdec],[2013-03-08])
 AC_CONFIG_SRCDIR([decoder/cdec.cc])
 AM_INIT_AUTOMAKE
 AC_CONFIG_HEADERS(config.h)
@@ -128,6 +128,7 @@ AC_CONFIG_FILES([training/pro/Makefile])
 AC_CONFIG_FILES([training/rampion/Makefile])
 AC_CONFIG_FILES([training/minrisk/Makefile])
 AC_CONFIG_FILES([training/mira/Makefile])
+AC_CONFIG_FILES([training/latent_svm/Makefile])
 AC_CONFIG_FILES([training/dtrain/Makefile])
 AC_CONFIG_FILES([mira-vlad/Makefile])
 
