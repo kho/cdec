@@ -26,7 +26,9 @@ class WeightsCache {
 };
 
 // Context that stores shared information across Functions.
-struct Context {
+class Context {
+ public:
+  Context() : sent_id(-1) {}
   // Metadata of current sentence
   // TODO: default ctor, assignment and copy for SentenceMetadata so that we no longer need the ptr
   boost::scoped_ptr<SentenceMetadata> smeta_ptr;
