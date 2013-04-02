@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <sstream>
 
@@ -74,7 +75,7 @@ struct Second : Pipe<Second> {
 struct IsZero : Pipe<IsZero> {
   typedef int itype;
   typedef bool otype;
-  static void Register(OptDesc *conf) {}
+  static void Register(OptDesc *opts) {}
   explicit IsZero(const VarMap &conf, Context *context) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg == 0; }
 };
@@ -115,7 +116,7 @@ typename F::otype run(typename F::itype arg) {
 struct Add1 : Pipe<Add1> {
   typedef int itype;
   typedef int otype;
-  static void Register(OptDesc *conf) {}
+  static void Register(OptDesc *opts) {}
   Add1(const VarMap &conf, Context *context) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg + 1; }
 };
@@ -123,7 +124,7 @@ struct Add1 : Pipe<Add1> {
 struct Times2 : Pipe<Times2> {
   typedef int itype;
   typedef int otype;
-  static void Register(OptDesc *conf) {}
+  static void Register(OptDesc *opts) {}
   Times2(const VarMap &conf, Context *context) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg * 2; }
 };
@@ -131,7 +132,7 @@ struct Times2 : Pipe<Times2> {
 struct IsEven : Pipe<IsEven> {
   typedef int itype;
   typedef bool otype;
-  static void Register(OptDesc *conf) {}
+  static void Register(OptDesc *opts) {}
   IsEven(const VarMap &conf, Context *context) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg % 2 == 0; }
 };
@@ -139,7 +140,7 @@ struct IsEven : Pipe<IsEven> {
 struct IsOdd : Pipe<IsOdd> {
   typedef int itype;
   typedef bool otype;
-  static void Register(OptDesc *conf) {}
+  static void Register(OptDesc *opts) {}
   IsOdd(const VarMap &conf, Context *context) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg % 2 != 0; }
 };
@@ -148,7 +149,7 @@ template <int n>
 struct AddN : Pipe<AddN<n> > {
   typedef int itype;
   typedef int otype;
-  static void Register(OptDesc *conf) {}
+  static void Register(OptDesc *opts) {}
   AddN(const VarMap &conf, Context *context) {}
   otype Apply(const Input &input, Context *context, itype arg) const { return arg + n; }
 };
@@ -157,11 +158,23 @@ template <int n>
 struct AddNTop60 : Pipe<AddNTop60<n> > {
   typedef int itype;
   typedef Maybe<int> otype;
-  static void Register(OptDesc *conf) {}
+  static void Register(OptDesc *opts) {}
   AddNTop60(const VarMap &conf, Context *context) {}
   otype Apply(const Input &input, Context *context, itype arg) const {
     if (arg + n < 60) return Just(arg + n);
     else return Nothing<int>();
+  }
+};
+
+struct Crash {
+  typedef int itype;
+  typedef int otype;
+  static void Register(OptDesc *opts) {}
+  Crash(const VarMap &conf, Context *context) {
+    throw runtime_error("Crash!");
+  }
+  otype Apply(const Input &input, Context *context, itype arg) const {
+    return arg;
   }
 };
 
@@ -219,6 +232,23 @@ void TestPipe() {
     typedef Lift<Add1> Madd1;
     Maybe<int> x = run<Madd1>(1), y = Just(2);
     assert(x == y);
+  } while (false);
+
+  do {
+    typedef Cond<IsZero, Add1, Crash> CrashOnNonZero;
+
+    int x = run<CrashOnNonZero>(0);
+    assert(x == 1);
+
+    bool okay = true;
+    try {
+      run<CrashOnNonZero>(1);
+      okay = false;
+    } catch (runtime_error e) {
+      string what = e.what();
+      assert(what == "Crash!");
+    }
+    assert(okay);
   } while (false);
 
   cerr << "TestFunc: pass" << endl;

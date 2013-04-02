@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 
+#include <boost/scoped_ptr.hpp>
 #include <boost/utility.hpp>
 
 namespace boost { namespace program_options {
@@ -12,9 +13,9 @@ struct variables_map;
 } // namespace program_options
 } // namespace boost
 
+namespace pipeline {
 typedef boost::program_options::options_description OptDesc;
 typedef boost::program_options::variables_map VarMap;
-namespace pipeline {
 
 struct Context;
 struct Input;
@@ -131,9 +132,9 @@ template <class T>
 struct Identity : Pipe<Identity<T> > {
   typedef T itype;
   typedef T otype;
-  static void Register(OptDesc *) {}
-  explicit Identity(const VarMap &, Context *) {}
-  T Apply(const Input &, Context *, itype i) const { return i; }
+  static void Register(OptDesc */*opts*/) {}
+  Identity(const VarMap &/*conf*/, Context */*context*/) {}
+  T Apply(const Input &/*input*/, Context */*context*/, itype arg) const { return arg; }
 };
 
 // Function composition; `F` is applied before `G`. Thus `F::otype`
@@ -142,13 +143,13 @@ template <class F, class G>
 struct Compose : Pipe<Compose<F, G> > {
   typedef typename F::itype itype;
   typedef typename G::otype otype;
-  static void Register(OptDesc *conf) {
-    F::Register(conf);
-    G::Register(conf);
+  static void Register(OptDesc *opts) {
+    F::Register(opts);
+    G::Register(opts);
   }
-  explicit Compose(const VarMap &conf, Context *context) : f_(conf, context), g_(conf, context) {}
-  otype Apply(const Input &input, Context *context, itype i) const {
-    typename F::otype t = f_.Apply(input, context, i);
+  Compose(const VarMap &conf, Context *context) : f_(conf, context), g_(conf, context) {}
+  otype Apply(const Input &input, Context *context, itype arg) const {
+    typename F::otype t = f_.Apply(input, context, arg);
     return g_.Apply(input, context, t);
   }
  private:
@@ -161,9 +162,9 @@ template <class T>
 struct Unit : Pipe<Unit<T> > {
   typedef T itype;
   typedef Maybe<T> otype;
-  static void Register(OptDesc *) {}
-  explicit Unit(const VarMap &, Context *) {}
-  otype Apply(const Input &, Context *, itype i) const { return Just(i); }
+  static void Register(OptDesc */*opts*/) {}
+  Unit(const VarMap &/*conf*/, Context */*context*/) {}
+  otype Apply(const Input &/*input*/, Context */*context*/, itype arg) const { return Just(arg); }
 };
 
 // Bind is just the `Maybe` monadic composition; `F` is first applied;
@@ -175,13 +176,13 @@ template <class F, class G>
 struct Bind : Pipe<Bind<F, G> > {
   typedef typename F::itype itype;
   typedef typename G::otype otype;
-  static void Register(OptDesc *conf) {
-    F::Register(conf);
-    G::Register(conf);
+  static void Register(OptDesc *opts) {
+    F::Register(opts);
+    G::Register(opts);
   }
-  explicit Bind(const VarMap &conf, Context *context) : f_(conf, context), g_(conf, context) {}
-  otype Apply(const Input &input, Context *context, itype i) const {
-    typename F::otype t = f_.Apply(input, context, i);
+  Bind(const VarMap &conf, Context *context) : f_(conf, context), g_(conf, context) {}
+  otype Apply(const Input &input, Context *context, itype arg) const {
+    typename F::otype t = f_.Apply(input, context, arg);
     if (t.IsNothing())
       return Nothing<typename G::otype::value_type>();
     return g_.Apply(input, context, t.Value());
@@ -191,28 +192,46 @@ struct Bind : Pipe<Bind<F, G> > {
   G g_;
 };
 
+// Delay construction of a pipe
+template <class F>
+struct Delayed : Pipe<Delayed<F> > {
+  typedef typename F::itype itype;
+  typedef typename F::otype otype;
+  static void Register(OptDesc *opts) {
+    F::Register(opts);
+  }
+  Delayed(const VarMap &conf, Context *context) : save_conf_(conf), save_context_(context), f_() {}
+  otype Apply(const Input &input, Context *context, itype arg) const {
+    if (!f_) f_.reset(new F(save_conf_, save_context_));
+    return f_->Apply(input, context, arg);
+  }
+ private:
+  const VarMap &save_conf_;
+  Context *save_context_;
+  mutable boost::scoped_ptr<F> f_;
+};
+
 // Conditional branching; `If` is predicate, i.e. `If::otype` should
 // be convertible to a bool. `Then`and `Else` should have compatible
-// `itype`s and `otype`s. Further, we are forwarding `itype` and
-// `otype` from `Then`, therefore recursive pipes can only take the
-// `Else` branch for the type system to work.
+// `itype`s and `otype`s. Further, the construction of `Then` and
+// `Else` are delayed until their first application.
 template <class If, class Then, class Else>
 struct Cond : Pipe<Cond<If, Then, Else> > {
   typedef typename Then::itype itype;
   typedef typename Then::otype otype;
-  static void Register(OptDesc *conf) {
-    If::Register(conf);
-    Then::Register(conf);
-    Else::Register(conf);
+  static void Register(OptDesc *opts) {
+    If::Register(opts);
+    Then::Register(opts);
+    Else::Register(opts);
   }
-  explicit Cond(const VarMap &conf, Context *context) : if_(conf, context), then_(conf, context), else_(conf, context) {}
-  otype Apply(const Input &input, Context *context, itype i) const {
-    return if_.Apply(input, context, i) ? then_.Apply(input, context, i) : else_.Apply(input, context, i);
+  Cond(const VarMap &conf, Context *context) : if_(conf, context), then_(conf, context), else_(conf, context) {}
+  otype Apply(const Input &input, Context *context, itype arg) const {
+    return if_.Apply(input, context, arg) ? then_.Apply(input, context, arg) : else_.Apply(input, context, arg);
   }
  private:
   If if_;
-  Then then_;
-  Else else_;
+  Delayed<Then> then_;
+  Delayed<Else> else_;
 };
 
 // Repeated application of a integer parameterized function `F`,
@@ -222,14 +241,14 @@ template <int n, template <int> class F>
 struct Repeat : Compose<Repeat<n - 1, F>, F<n> > {
   typedef typename F<n>::itype itype;
   typedef typename F<n>::otype otype;
-  explicit Repeat(const VarMap &conf, Context *context) : Compose<Repeat<n - 1, F>, F<n> >(conf, context) {}
+  Repeat(const VarMap &conf, Context *context) : Compose<Repeat<n - 1, F>, F<n> >(conf, context) {}
 };
 
 template <template <int> class F>
 struct Repeat<0, F> : Identity<typename F<0>::itype> {
   typedef typename F<0>::itype itype;
   typedef typename F<0>::otype otype;
-  explicit Repeat(const VarMap &conf, Context *context) : Identity<typename F<0>::itype>(conf, context) {}
+  Repeat(const VarMap &conf, Context *context) : Identity<typename F<0>::itype>(conf, context) {}
 };
 
 // Repeated application of a integer parameterized monadic function
@@ -238,22 +257,22 @@ template <int n, template <int> class F>
 struct Loop : Bind<Loop<n - 1, F>, F<n> > {
   typedef typename F<n>::itype itype;
   typedef typename F<n>::otype otype;
-  explicit Loop(const VarMap &conf, Context *context) : Bind<Loop<n - 1, F>, F<n> >(conf, context) {}
+  Loop(const VarMap &conf, Context *context) : Bind<Loop<n - 1, F>, F<n> >(conf, context) {}
 };
 
 template <template <int> class F>
 struct Loop<0, F> : Unit<typename F<0>::itype> {
   typedef typename F<0>::itype itype;
   typedef typename F<0>::otype otype;
-  explicit Loop(const VarMap &conf, Context *context) : Unit<typename F<0>::itype>(conf, context) {}
+  Loop(const VarMap &conf, Context *context) : Unit<typename F<0>::itype>(conf, context) {}
 };
 
 template <class F>
 struct Lift : Pipe<Lift<F> > {
   typedef typename F::itype itype;
   typedef Maybe<typename F::otype> otype;
-  static void Register(OptDesc *conf) { F::Register(conf); }
-  explicit Lift(const VarMap &conf, Context *context) : f_(conf, context) {}
+  static void Register(OptDesc *opts) { F::Register(opts); }
+  Lift(const VarMap &conf, Context *context) : f_(conf, context) {}
   otype Apply(const Input &input, Context *context, itype arg) const {
     return Just(f_.Apply(input, context, arg));
   }
