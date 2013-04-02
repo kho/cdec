@@ -100,7 +100,7 @@ struct any_printer  : public boost::function<void (Ostream &,boost::any const&)>
   template <class T>
   void set()
   {
-    F f(typed_print<T>());
+    F f((typed_print<T>()));
     swap(f);
   }
 };

@@ -323,14 +323,14 @@ private:
   //friend class boost::serialization::access;
 public:
   template <class Archive>
-  void save(Archive& ar, unsigned int version) const
+  void save(Archive& ar, unsigned int /*version*/) const
   {
     ar << sz;
     for (size_type i = 0; i != sz; ++i) ar << at(i);
   }
 
   template <class Archive>
-  void load(Archive& ar, unsigned int version)
+  void load(Archive& ar, unsigned int /*version*/)
   {
     size_type s;
     ar >> s;

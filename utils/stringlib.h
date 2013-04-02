@@ -86,8 +86,8 @@ bool match_begin(Str const& str,Prefix const& prefix)
 // source will be returned as a string, target must be a sentence or
 // a lattice (in PLF format) and will be returned as a Lattice object
 void ParseTranslatorInput(const std::string& line, std::string* input, std::string* ref);
-class Lattice;
-void ParseTranslatorInputLattice(const std::string& line, std::string* input, Lattice* ref);
+// class Lattice;
+// void ParseTranslatorInputLattice(const std::string& line, std::string* input, Lattice* ref);
 
 inline std::string Trim(const std::string& str, const std::string& dropChars = " \t") {
   std::string res = str;
