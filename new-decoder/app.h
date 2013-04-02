@@ -80,7 +80,16 @@ void RunApp(int argc, char *argv[]) {
 
   if (conf.count("show_config")) // special handling needed because we only want to notify() once.
     show_config=true;
-
+  if (conf.count("config")) {
+    typedef vector<string> Cs;
+    Cs cs=conf["config"].as<Cs>();
+    for (int i=0;i<cs.size();++i) {
+      string cfg=cs[i];
+      cerr << "Configuration file: " << cfg << endl;
+      ReadFile conff(cfg);
+      po::store(po::parse_config_file(*conff, dconfig_options), conf);
+    }
+  }
   po::notify(conf);
   if (show_config && !cfg_files.empty()) {
     cerr<< "\nConfig files:\n\n";
