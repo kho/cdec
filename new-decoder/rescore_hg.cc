@@ -60,7 +60,7 @@ namespace pipeline {
 bool ShouldRescorePred(const VarMap &conf, int pass) {
   string ws(PerPassOptionName("weights", pass)), ff(PerPassOptionName("feature_function", pass));
   bool has_ws = conf.count(ws), has_ff = conf.count(ff);
-  return has_ws || has_ff;
+  return has_ff || (pass > 1 && has_ws);
 }
 
 bool ShouldSummarizePred(const VarMap &conf, int pass) {
