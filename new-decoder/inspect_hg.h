@@ -18,6 +18,9 @@ struct ShowForestStats : Pipe<ShowForestStats> {
   typedef Hypergraph * otype;
 
   static void Register(OptDesc *opts) {
+    static bool added_;
+    if (added_) return;
+    added_ = true;
     namespace po = boost::program_options;
     opts->add_options()
         ("show_tree_structure", "Show the Viterbi derivation structure")
@@ -54,6 +57,9 @@ struct ShouldShowExpectedLength : Pipe<ShouldShowExpectedLength> {
   typedef Hypergraph * itype;
   typedef bool otype;
   static void Register(OptDesc *opts) {
+    static bool added_;
+    if (added_) return;
+    added_ = true;
     opts->add_options()
         ("show_expected_length", "Show the expected translation length under the model")
         ;
@@ -79,6 +85,9 @@ struct ShouldShowPartition : Pipe<ShouldShowPartition> {
   typedef Hypergraph * itype;
   typedef bool otype;
   static void Register(OptDesc *opts) {
+    static bool added_;
+    if (added_) return;
+    added_ = true;
     opts->add_options()
         ("show_partition,z", "Compute and show the partition (inside score)")
         ;
@@ -115,6 +124,9 @@ struct OptShowConditionalProb : Pipe<OptShowConditionalProb> {
   typedef Maybe<Hypergraph *> itype;
   typedef Maybe<Hypergraph *> otype;
   static void Register(OptDesc *opts) {
+    static bool added_;
+    if (added_) return;
+    added_ = true;
     opts->add_options()
         ("show_conditional_prob", "Output the conditional log prob to STDOUT instead of a translation")
         ;

@@ -90,6 +90,9 @@ struct RescoreHg : Pipe<RescoreHg<PASS> > {
   typedef Maybe<Hypergraph *> otype;
 
   static void Register(OptDesc *opts) {
+    static bool added_;
+    if (added_) return;
+    added_ = true;
     if (PASS == 1) Register1(opts);
     else RegisterN(opts);
   }
@@ -142,6 +145,9 @@ struct SummaryHg : Pipe<SummaryHg<PASS> > {
   typedef Maybe<Hypergraph *> otype;
 
   static void Register(OptDesc *opts) {
+    static bool added_;
+    if (added_) return;
+    added_ = true;
     if (PASS == 1) Register1(opts);
     else RegisterN(opts);
   }
@@ -189,6 +195,9 @@ struct PruneHg : Pipe<PruneHg<PASS> > {
   typedef Maybe<Hypergraph *> otype;
 
   static void Register(OptDesc *opts) {
+    static bool added_;
+    if (added_) return;
+    added_ = true;
     if (PASS == 1) Register1(opts);
     else RegisterN(opts);
   }

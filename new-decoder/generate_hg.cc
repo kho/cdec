@@ -25,6 +25,9 @@ namespace po = boost::program_options;
 namespace pipeline {
 
 void FirstPassTranslate::Register(OptDesc *opts) {
+  static bool added_;
+  if (added_) return;
+  added_ = true;
   opts->add_options()
       ("formalism,f", po::value<string>(), "Decoding formalism; values include SCFG, FST, PB, LexTrans (lexical translation model, also disc training), CSplit (compound splitting), Tagger (sequence labeling), LexAlign (alignment only, or EM training)")
       ("grammar,g", po::value<vector<string> >()->composing(), "Either SCFG grammar file(s) or phrase tables file(s)")
@@ -46,8 +49,7 @@ void FirstPassTranslate::Register(OptDesc *opts) {
       ("csplit_output_plf", "(Compound splitter) Output lattice in PLF format")
       ("csplit_preserve_full_word", "(Compound splitter) Always include the unsegmented form in the output lattice")
       ("pb_max_distortion,D", po::value<int>()->default_value(4), "Phrase-based decoder: maximum distortion")
-      ("show_tree_structure", "Show the Viterbi derivation structure") // !!!!
-      ("weights,w", po::value<std::string>(), "Feature weights file (initial forest / pass 1)") // multiple occurrence
+      // ("weights,w", po::value<std::string>(), "Feature weights file (initial forest / pass 1)") // multiple occurrence
       ;
 }
 

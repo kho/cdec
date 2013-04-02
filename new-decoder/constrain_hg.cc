@@ -21,9 +21,12 @@ bool InputHasRef::Apply(const Input &input, Context *, itype) const {
 }
 
 void ConstrainHgWithRef::Register(OptDesc *opts) {
+  static bool added_;
+  if (added_) return;
   opts->add_options()
       ("remove_intersected_rule_annotations", "After forced decoding is completed, remove nonterminal annotations (i.e., the source side spans)")
       ;
+  added_ = true;
 }
 
 struct ConstrainHgWithRefImpl {

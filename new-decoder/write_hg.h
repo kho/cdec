@@ -26,6 +26,9 @@ struct ShouldWriteForest : Pipe<ShouldWriteForest> {
   typedef Hypergraph * itype;
   typedef bool otype;
   static void Register(OptDesc *opts) {
+    static bool added_;
+    if (added_) return;
+    added_ = true;
     opts->add_options()
         ("forest_output,O",boost::program_options::value<std::string>(),"Directory to write forests to")
         ;
@@ -76,6 +79,9 @@ struct OptPrintGraphviz : Pipe<OptPrintGraphviz> {
   typedef Hypergraph * itype;
   typedef Hypergraph * otype;
   static void Register(OptDesc *opts) {
+    static bool added_;
+    if (added_) return;
+    added_ = true;
     opts->add_options()
         ("graphviz","Show (constrained) translation forest in GraphViz format")
         ;
@@ -94,6 +100,9 @@ struct OptJoshuaViz : Pipe<OptJoshuaViz> {
   typedef Hypergraph * itype;
   typedef Hypergraph * otype;
   static void Register(OptDesc *opts) {
+    static bool added_;
+    if (added_) return;
+    added_ = true;
     opts->add_options()
         ("show_joshua_visualization,J", "Produce output compatible with the Joshua visualization tools")
         ;
@@ -109,7 +118,6 @@ struct OptJoshuaViz : Pipe<OptJoshuaViz> {
  private:
   bool do_;
 };
-
 
 
 struct ShouldWriteKBest : Pipe<ShouldWriteKBest> {
@@ -144,6 +152,9 @@ struct WriteKBest : Pipe<WriteKBest> {
   typedef Maybe<Hypergraph *> itype;
   typedef Maybe<Hypergraph *> otype;
   static void Register(OptDesc *opts) {
+    static bool added_;
+    if (added_) return;
+    added_ = true;
     namespace po = boost::program_options;
     opts->add_options()
         ("show_derivations", po::value<std::string>(), "Directory to print the derivation structures to")
