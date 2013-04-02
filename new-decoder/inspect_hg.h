@@ -24,7 +24,7 @@ struct ShowForestStats : Pipe<ShowForestStats> {
     namespace po = boost::program_options;
     opts->add_options()
         ("show_tree_structure", "Show the Viterbi derivation structure")
-        ("show_derivations", po::value<std::string>(), "Directory to print the derivation structures to")
+        // ("show_derivations", po::value<std::string>(), "Directory to print the derivation structures to")
         ("extract_rules", po::value<std::string>(), "Extract the rules used in translation (not de-duped!) to a file in this directory")
         ;
   }

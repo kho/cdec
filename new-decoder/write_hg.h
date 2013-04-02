@@ -162,9 +162,10 @@ struct WriteKBest : Pipe<WriteKBest> {
         ("unique_k_best,r", "Unique k-best translation list")
         ;
   }
-  WriteKBest(const VarMap &conf, Context */*context*/) :
+  WriteKBest(const VarMap &conf, Context *context) :
       k_best_(conf["k_best"].as<int>()), unique_(conf.count("unique_k_best")) {
     deriv_ = conf.count("show_derivations") ? conf["show_derivations"].as<std::string>() : "-";
+    context->oracle.show_derivation = conf.count("show_derivations");
   }
   otype Apply(const Input &/*input*/, Context *context, itype arg) const {
     if (arg.IsNothing())
