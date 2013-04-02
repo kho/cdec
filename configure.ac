@@ -4,9 +4,9 @@ AM_INIT_AUTOMAKE
 AC_CONFIG_HEADERS(config.h)
 AC_PROG_LIBTOOL
 AC_PROG_LEX
-case $LEX in 
-:) AC_MSG_ERROR([No lex (Flex, lex, etc.) program found]);; 
-esac 
+case $LEX in
+:) AC_MSG_ERROR([No lex (Flex, lex, etc.) program found]);;
+esac
 # CPPFLAGS="$CPPFLAGS -std=c++0x"
 AC_PROG_CC
 AC_PROG_CXX
@@ -107,6 +107,7 @@ AC_CONFIG_FILES([utils/Makefile])
 AC_CONFIG_FILES([mteval/Makefile])
 AC_CONFIG_FILES([mteval/meteor_jar.cc])
 AC_CONFIG_FILES([decoder/Makefile])
+AC_CONFIG_FILES([new-decoder/Makefile])
 AC_CONFIG_FILES([python/setup.py])
 AC_CONFIG_FILES([word-aligner/Makefile])
 
@@ -134,4 +135,3 @@ AC_CONFIG_FILES([training/dtrain/Makefile])
 AC_CONFIG_FILES([example_extff/Makefile])
 
 AC_OUTPUT
-

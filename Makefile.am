@@ -11,6 +11,7 @@ SUBDIRS = \
   klm/lm/builder \
   klm/search \
   decoder \
+  new-decoder \
   training \
   training/liblbfgs \
   word-aligner \
@@ -22,4 +23,3 @@ EXTRA_DIST = corpus tests python/pkg python/src python/tests python/examples com
 AUTOMAKE_OPTIONS = foreign
 ACLOCAL_AMFLAGS = -I m4
 AM_CPPFLAGS =  -D_GLIBCXX_PARALLEL
-
