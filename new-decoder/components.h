@@ -38,7 +38,8 @@ class StdRescoreDefs {
  public:
   typedef
     typename RescoreHg<PASS>::
-    template PIPE_BIND(Lift<ShowForestStats>)
+    template PIPE_BIND(Lift<ShowForestStats>)::
+    template PIPE_BIND(OptShowPartition)
   DoRescore;
 
   typedef
@@ -65,7 +66,6 @@ class StdRescoreDefs {
 
   typedef
     typename StdRescore::
-    template PIPE_BIND(OptShowPartition)::
     template PIPE_BIND(StdSummary)::
     template PIPE_BIND(StdPrune)
   StdRescorePass;
