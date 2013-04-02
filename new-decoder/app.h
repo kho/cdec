@@ -47,9 +47,11 @@ void RunApp(int argc, char *argv[]) {
 
   OptDesc opts;
   opts.add_options()
+      ("input,i",po::value<string>()->default_value("-"),"Source file")
       ("list_feature_functions,L","List available feature functions")
       ("quiet", "Disable verbose output")
       ("show_config", po::bool_switch(&show_config), "show contents of loaded -c config files.")
+      ("show_feature_dictionary", "After decoding the last input, write the contents of the feature dictionary")
       ;
   PIPE::Register(&opts);
 
@@ -127,11 +129,25 @@ void RunApp(int argc, char *argv[]) {
 
   PIPE p(conf, &context);
 
+  string source_path = conf["input"].as<string>();
+  bool show_feature_dictionary = conf.count("show_feature_dictionary");
+  if (!SILENT) cerr << "Reading input from " << ((source_path == "-") ? "STDIN" : source_path.c_str()) << endl;
+  ReadFile in_read(source_path);
+  istream *in = in_read.stream();
+  assert(*in);
+
   string text;
-  while (getline(cin, text)) {
+  while (getline(*in, text)) {
     NgramCache::Clear();   // clear ngram cache for remote LM (if used)
     Input input(text, &context);
     p.Apply(input, &context, Void());
+  }
+
+  if (show_feature_dictionary) {
+    int num = FD::NumFeats();
+    for (int i = 1; i < num; ++i) {
+      cout << FD::Convert(i) << endl;
+    }
   }
 }
 } // namespace pipeline
