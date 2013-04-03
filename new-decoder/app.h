@@ -6,6 +6,7 @@
 #include "context.h"
 #include "silent.h"
 
+#include "ff_register.h"
 #include "program_options.h"
 
 #include <iostream>
@@ -41,6 +42,7 @@ void RunApp(int argc, char *argv[]) {
   namespace po = boost::program_options;
   Context context;
 
+  register_feature_functions();
 
   bool show_config;
   vector<string> cfg_files;

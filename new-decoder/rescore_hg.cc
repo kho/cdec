@@ -148,7 +148,7 @@ RescoreHgImpl::RescoreHgImpl(const VarMap &conf, Context *context, int pass) : r
   // do not "reuse" previous feature functions...
   vector<string> feature_functions;
   if (has_ff)
-    feature_functions = FindExactOption<vector<string> >("feature_functions", pass, conf);
+    feature_functions = FindExactOption<vector<string> >("feature_function", pass, conf);
   Rescorer *p = new Rescorer(weights, feature_functions, intersection_strategy, pop_limit);
   r_.reset(p);
 }
