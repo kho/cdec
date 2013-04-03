@@ -22,11 +22,11 @@ typedef Lift<ShowPartition::PIPE_ON(ShouldShowPartition)> OptShowPartition;
 //
 
 typedef
-  InitForestStage::
-  PIPE_COMP(FirstPassTranslate)::
-  PIPE_BIND(Lift<ShowForestStats>)::
-  PIPE_BIND(OptShowExpectedLength)::
-  PIPE_BIND(OptShowPartition)
+  InitForestStage::                     // Sets stage string
+  PIPE_COMP(FirstPassTranslate)::       // Build init forest
+  PIPE_BIND(Lift<ShowForestStats>)::    // Show forest if succeeds
+  PIPE_BIND(OptShowExpectedLength)::    // Show E(L) when required via options
+  PIPE_BIND(OptShowPartition)           // Show partition value when required
 StdInitForest;
 
 //
@@ -37,20 +37,22 @@ template <int PASS>
 class StdRescoreDefs {
  public:
   typedef
-    typename RescoreHg<PASS>::
-    template PIPE_BIND(Lift<ShowForestStats>)::
-    template PIPE_BIND(OptShowPartition)
+    typename RescoreHg<PASS>::          // Actual rescoring
+    template PIPE_BIND(Lift<ShowForestStats>):: // Show forest if suceeds
+    template PIPE_BIND(OptShowPartition)        // Show partition value when required
   DoRescore;
 
   typedef
-    typename RescoreStage<PASS>::
+    typename RescoreStage<PASS>::       // Stage string
     template PIPE_BIND(
-      typename DoRescore::template PIPE_WHEN(ShouldRescore<PASS>))
+      typename DoRescore::
+      template PIPE_WHEN(ShouldRescore<PASS>)) // Only rescore when
+                                               // feature functions or different weight vector are given.
   StdRescore;
 
   typedef
     typename SummaryHg<PASS>::
-    template PIPE_WHEN(ShouldSummarize<PASS>)
+    template PIPE_WHEN(ShouldSummarize<PASS>) // Only summarize when asked to and rescoring happened.
   StdSummary;
 
   typedef
@@ -61,7 +63,8 @@ class StdRescoreDefs {
   typedef
     typename RescorePruneStage<PASS>::
     template PIPE_BIND(
-      typename DoPrune::template PIPE_WHEN(ShouldPrune<PASS>))
+      typename DoPrune::
+      template PIPE_WHEN(ShouldPrune<PASS>)) // Only prune when asked to.
   StdPrune;
 
   typedef
@@ -81,13 +84,13 @@ typedef StdRescorePass1::PIPE_BIND(StdRescorePass2)::PIPE_BIND(StdRescorePass3) 
 //
 
 typedef
-  ConstrainForestStage::
+  ConstrainForestStage::                // Stage string
   PIPE_BIND(
     ConstrainHgWithRef::
     PIPE_BIND(Lift<ShowForestStats>)::
     PIPE_BIND(Lift<ShowViterbiFTree>)::
     PIPE_BIND(OptShowPartition)::
-  PIPE_WHEN(InputHasRef))
+  PIPE_WHEN(InputHasRef))               // Only when input has reference
 StdRefIntersect;
 
 typedef Cond<ShouldWrite1Best, Write1Best, WriteKBest::PIPE_ON(ShouldWriteKBest)> OutputSent;

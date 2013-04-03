@@ -14,16 +14,22 @@ struct variables_map;
 } // namespace boost
 
 namespace pipeline {
+
+// Types requently used in pipe definitions
 typedef boost::program_options::options_description OptDesc;
 typedef boost::program_options::variables_map VarMap;
 
 struct Context;
 struct Input;
 
-// Dummy argument
+// Dummy argument; plain old `void` does not play well with template
+// arguments.
 struct Void {};
 
-// Result that may fail; `T` must be copyable and copy-assignable.
+// Result that may fail; `T` must be copyable and
+// copy-assignable. Consider use it whenever the computation fails but
+// the program should not crash. See the description of pipe
+// operations to see the benefits and an example.
 template <class T>
 class Maybe {
  public:
@@ -112,7 +118,51 @@ template <class F, class G> struct Bind; // (a -> Maybe b) -> (b -> Maybe c) -> 
 // Conditional branching
 template <class If, class Then, class Else> struct Cond; // (a -> bool) -> (a -> b) -> (a -> b) -> (a -> b)
 
-// Allow operator style composition, bind and conditionals.
+// Conceptually a pipe is a piece of code that receives some data,
+// does some transformation and returns the result. More concretely, a
+// pipe struct should define the following public members,
+//
+// - `itype`, the type of input data; and `otype`, the type of output
+// data.
+//
+// - A `static void Register(OptDesc *)` function that registers program
+// options. It is important to ensure `Register` only executes once,
+// even when called multiple times. This can be achieved by defining a
+// static bool variable inside the function to mark whether it has
+// been executed.
+//
+// - One only constructor that takes `(const VarMap &, Context *)`,
+// any preprocessing or loading side-data should happen here.
+//
+// - A `otype Apply(const Input &, Context *, itype) const` function
+// that does the actual data processing. If `itype` is a pointer type,
+// then the pipe owns the memory when `Apply` is called. Therefore, if
+// the data is not further forwarded by returning, it should be freed
+// before `Apply` returns. In most cases, a pipe does in-place
+// modification of the input and returns it right away, where no
+// freeing would be necessary. The `Apply` function should be as
+// context independent as possible, which is one of the reason it is
+// marked as `const`.
+//
+// Inheriting from `Pipe` does not guarantee any of the above
+// requirements. Instead, it allows operator style composition, bind
+// and conditionals, for defining composed pipes.
+//
+// Example: the following struct defines a pipe that keeps odd numbers
+// but fails on even numbers.
+//
+// struct OddOnly : Pipe<OddOnly> {
+//   typedef int itype;
+//   typedef Maybe<int> otype;
+//   static void Register(OptDesc *) {}
+//   OddOnly(const VarMap &, Context *) {}
+//   otype Apply(const Input &, Context *, itype arg) const {
+//     if (arg % 2) return Just(arg);
+//     return Nothing<int>();
+//   }
+// };
+//
+// See also: the declaration of `Input` and `Context`.
 template <class F>
 struct Pipe : boost::noncopyable {
   // Functional composition
@@ -127,7 +177,7 @@ struct Pipe : boost::noncopyable {
   template <class If> struct when { typedef Cond<If, F, Unit<typename F::itype> > type; };
 };
 
-// Identity function from `T` to `T`
+// Identity pipe from `T` to `T`; simply passes the input data.
 template <class T>
 struct Identity : Pipe<Identity<T> > {
   typedef T itype;
@@ -137,8 +187,10 @@ struct Identity : Pipe<Identity<T> > {
   T Apply(const Input &/*input*/, Context */*context*/, itype arg) const { return arg; }
 };
 
-// Function composition; `F` is applied before `G`. Thus `F::otype`
-// should be compatible with `G::itype`.
+// Pipe composition; results in a composed pipe that first processes
+// data with `F` and then feeds the intermediate result to `G`. Since
+// `F` is applied before `G`, `F::otype` should be compatible with
+// `G::itype`.
 template <class F, class G>
 struct Compose : Pipe<Compose<F, G> > {
   typedef typename F::itype itype;
@@ -157,7 +209,8 @@ struct Compose : Pipe<Compose<F, G> > {
   G g_;
 };
 
-// Unit is just the monadic identity from `T` to `Maybe<T>`
+// Unit pipe wraps a value `x` of type `T` in the form of `Just(x)`,
+// of type `Maybe<T>`.
 template <class T>
 struct Unit : Pipe<Unit<T> > {
   typedef T itype;
@@ -168,10 +221,33 @@ struct Unit : Pipe<Unit<T> > {
 };
 
 // Bind is just the `Maybe` monadic composition; `F` is first applied;
-// if the result is not `Nothing`, its value will be then applied to
-// `G`, returning another `Maybe`. Otherwise, `Nothing` with proper
-// type is propagated. Therefore, `F::otype` must be compatible with
-// `Maybe<G::itype>`.
+// if the result is not `Nothing`, the value inside `Just` will be
+// then applied to `G`, returning another `Maybe`. Otherwise,
+// `Nothing` with proper type is propagated. Therefore, `F::otype`
+// must be compatible with `Maybe<G::itype>`.
+//
+// `Bind` is very useful for describing computation that might
+// fail. For example, suppose we have defined a `PrintInt` pipe that
+// prints an integer and passes the integer through in a `Just`. Then
+// combined with `OddOnly` defined above, a pipe that prints only the
+// odd numbers can be implemented as:
+//
+// Bind<OddOnly, PrintInt> (or equivalently, OddOnly::bind<PrintInt>::type)
+//
+// An actual use case is in the translator, where the input may not
+// have any parse, and then no further operation should be applied;
+// while if the input can be parsed, further operations such as
+// computing statistics of the forest, or rescoring the forest should
+// be carried out. The translator pipe (`FirstPassTranslate`) is a
+// `Void` to `Maybe<Hypergraph *>` pipe. Pipes following it are from
+// `Hypergraph *` to `Maybe<Hypergraph *>`. This allows us to assume
+// valid input when implementing subsequent pipes and by binding the
+// pipes, they are guarranteed to only execute when translator
+// succeeds. (In the final stage though, we need to output an empty
+// line, in the event of no translation. We should then use `Comp` to
+// compose a pipe from `Maybe<Hypergraph *>` to `Maybe<Hypergraph *>`,
+// to make sure we print the empty line when the translator gives
+// `Nothing`.
 template <class F, class G>
 struct Bind : Pipe<Bind<F, G> > {
   typedef typename F::itype itype;
@@ -192,7 +268,26 @@ struct Bind : Pipe<Bind<F, G> > {
   G g_;
 };
 
-// Delay construction of a pipe
+// Lifts a pipe so that it can be bound, by converting `F::otype` to
+// `Maybe<F::otype>`. For pipes that will not fail, it is better to
+// define them as is and then 'lift' them to convert the output type
+// to `Maybe` with this.
+template <class F>
+struct Lift : Pipe<Lift<F> > {
+  typedef typename F::itype itype;
+  typedef Maybe<typename F::otype> otype;
+  static void Register(OptDesc *opts) { F::Register(opts); }
+  Lift(const VarMap &conf, Context *context) : f_(conf, context) {}
+  otype Apply(const Input &input, Context *context, itype arg) const {
+    return Just(f_.Apply(input, context, arg));
+  }
+ private:
+  F f_;
+};
+
+// Delays the construction of the pipe till the first call of
+// `Apply`. Used in `Cond` to make sure `Then` and `Else` pipes are
+// only constructed in accordance with branching.
 template <class F>
 struct Delayed : Pipe<Delayed<F> > {
   typedef typename F::itype itype;
@@ -211,10 +306,13 @@ struct Delayed : Pipe<Delayed<F> > {
   mutable boost::scoped_ptr<F> f_;
 };
 
-// Conditional branching; `If` is predicate, i.e. `If::otype` should
-// be convertible to a bool. `Then`and `Else` should have compatible
-// `itype`s and `otype`s. Further, the construction of `Then` and
-// `Else` are delayed until their first application.
+// Conditional branching; `If` is the predicate, i.e. `If::otype`
+// should be convertible to a bool. `Then`and `Else` should have
+// identical `otype`s. All three pipes should have identical
+// `itype`s. When `If` evaluates to true, the input is passed onto
+// `Then`; otherwise it is passed onto `Else`. Further, the
+// construction of `Then` and `Else` are delayed until their first
+// application.
 template <class If, class Then, class Else>
 struct Cond : Pipe<Cond<If, Then, Else> > {
   typedef typename Then::itype itype;
@@ -234,51 +332,38 @@ struct Cond : Pipe<Cond<If, Then, Else> > {
   Delayed<Else> else_;
 };
 
-// Repeated application of a integer parameterized function `F`,
-// i.e. F<1>::PIPE_COMP(F<2>)::...::PIPE_COMP(F<n>). `F` should have
-// compatible itype and otype, so that the calls can be chained.
-template <int n, template <int> class F>
-struct Repeat : Compose<Repeat<n - 1, F>, F<n> > {
-  typedef typename F<n>::itype itype;
-  typedef typename F<n>::otype otype;
-  Repeat(const VarMap &conf, Context *context) : Compose<Repeat<n - 1, F>, F<n> >(conf, context) {}
-};
+// // Repeated application of a integer parameterized function `F`,
+// // i.e. F<1>::PIPE_COMP(F<2>)::...::PIPE_COMP(F<n>). `F` should have
+// // compatible itype and otype, so that the calls can be chained.
+// template <int n, template <int> class F>
+// struct Repeat : Compose<Repeat<n - 1, F>, F<n> > {
+//   typedef typename F<n>::itype itype;
+//   typedef typename F<n>::otype otype;
+//   Repeat(const VarMap &conf, Context *context) : Compose<Repeat<n - 1, F>, F<n> >(conf, context) {}
+// };
 
-template <template <int> class F>
-struct Repeat<0, F> : Identity<typename F<0>::itype> {
-  typedef typename F<0>::itype itype;
-  typedef typename F<0>::otype otype;
-  Repeat(const VarMap &conf, Context *context) : Identity<typename F<0>::itype>(conf, context) {}
-};
+// template <template <int> class F>
+// struct Repeat<0, F> : Identity<typename F<0>::itype> {
+//   typedef typename F<0>::itype itype;
+//   typedef typename F<0>::otype otype;
+//   Repeat(const VarMap &conf, Context *context) : Identity<typename F<0>::itype>(conf, context) {}
+// };
 
-// Repeated application of a integer parameterized monadic function
-// `F`, i.e. F<1>::PIPE_BIND(F<2>)::...::PIPE_BIND(F<n>).
-template <int n, template <int> class F>
-struct Loop : Bind<Loop<n - 1, F>, F<n> > {
-  typedef typename F<n>::itype itype;
-  typedef typename F<n>::otype otype;
-  Loop(const VarMap &conf, Context *context) : Bind<Loop<n - 1, F>, F<n> >(conf, context) {}
-};
+// // Repeated application of a integer parameterized monadic function
+// // `F`, i.e. F<1>::PIPE_BIND(F<2>)::...::PIPE_BIND(F<n>).
+// template <int n, template <int> class F>
+// struct Loop : Bind<Loop<n - 1, F>, F<n> > {
+//   typedef typename F<n>::itype itype;
+//   typedef typename F<n>::otype otype;
+//   Loop(const VarMap &conf, Context *context) : Bind<Loop<n - 1, F>, F<n> >(conf, context) {}
+// };
 
-template <template <int> class F>
-struct Loop<0, F> : Unit<typename F<0>::itype> {
-  typedef typename F<0>::itype itype;
-  typedef typename F<0>::otype otype;
-  Loop(const VarMap &conf, Context *context) : Unit<typename F<0>::itype>(conf, context) {}
-};
-
-template <class F>
-struct Lift : Pipe<Lift<F> > {
-  typedef typename F::itype itype;
-  typedef Maybe<typename F::otype> otype;
-  static void Register(OptDesc *opts) { F::Register(opts); }
-  Lift(const VarMap &conf, Context *context) : f_(conf, context) {}
-  otype Apply(const Input &input, Context *context, itype arg) const {
-    return Just(f_.Apply(input, context, arg));
-  }
- private:
-  F f_;
-};
+// template <template <int> class F>
+// struct Loop<0, F> : Unit<typename F<0>::itype> {
+//   typedef typename F<0>::itype itype;
+//   typedef typename F<0>::otype otype;
+//   Loop(const VarMap &conf, Context *context) : Unit<typename F<0>::itype>(conf, context) {}
+// };
 
 } // namespace pipeline
 

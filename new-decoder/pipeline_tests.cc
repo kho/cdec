@@ -202,17 +202,17 @@ void TestPipe() {
     assert(run<Add1::COMP(Times2::ON(IsEven)::COMP(Add1)::ON(IsOdd))>(a[i]) == v);
   }
 
-  do {
-    int x = run<Repeat<10, AddN> >(0);
-    assert(x == 55);
-  } while (false);
+  // do {
+  //   int x = run<Repeat<10, AddN> >(0);
+  //   assert(x == 55);
+  // } while (false);
 
-  do {
-    Maybe<int> x = run<Loop<10, AddNTop60> >(0);
-    assert(x == Just(55));
-    x = run<Loop<10, AddNTop60> >(5);
-    assert(x.IsNothing());
-  } while (false);
+  // do {
+  //   Maybe<int> x = run<Loop<10, AddNTop60> >(0);
+  //   assert(x == Just(55));
+  //   x = run<Loop<10, AddNTop60> >(5);
+  //   assert(x.IsNothing());
+  // } while (false);
 
   for (int i = 0; i < n; ++i) {
     Maybe<int> t1, t2;
