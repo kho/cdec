@@ -53,6 +53,7 @@ struct ConstrainHgWithRefImpl {
       return Just(arg);
     } else {
       if (!SILENT) cerr << "  REFERENCE UNREACHABLE.\n";
+      delete arg;
       return Nothing<Hypergraph *>();
     }
   }

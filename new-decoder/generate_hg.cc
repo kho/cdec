@@ -106,6 +106,7 @@ struct FirstPassTranslateImpl {
     translator_->SentenceComplete();
     if (!translation_successful) {
       if (!SILENT) { cerr << "  NO PARSE FOUND.\n"; }
+      delete forest;
       return Nothing<Hypergraph *>();
     }
     return Just(forest);

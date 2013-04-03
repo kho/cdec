@@ -244,7 +244,7 @@ void TestPipe() {
     try {
       run<CrashOnNonZero>(1);
       okay = false;
-    } catch (runtime_error e) {
+    } catch (runtime_error &e) {
       string what = e.what();
       assert(what == "Crash!");
     }
