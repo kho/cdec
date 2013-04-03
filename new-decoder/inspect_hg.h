@@ -24,33 +24,24 @@ struct ShowForestStats : Pipe<ShowForestStats> {
     namespace po = boost::program_options;
     opts->add_options()
         ("show_tree_structure", "Show the Viterbi derivation structure")
-        // ("show_derivations", po::value<std::string>(), "Directory to print the derivation structures to")
-        ("extract_rules", po::value<std::string>(), "Extract the rules used in translation (not de-duped!) to a file in this directory")
         ;
   }
 
+  // FIXME: show_derivations controls both ShowForestStats and WriteKBest
   ShowForestStats(const VarMap &conf, Context */*context*/)
       : show_tree_(conf.count("show_tree_structure")),
-        show_deriv_(conf.count("show_derivations")),
-        extract_rules_(conf.count("extract_rules")) {
-    if (extract_rules_)
-      extract_path_ = conf["extract_rules"].as<std::string>();
-  }
+        show_deriv_(conf.count("show_derivations")) {}
 
   otype Apply(const Input &, Context *context, itype arg) const {
     if (!SILENT) {
-      std::stringstream ss;
-      ss << context->sent_id;
-      boost::shared_ptr<WriteFile> extract_file(new WriteFile(extract_path_ + "/" + ss.str()));
-      std::cerr << viterbi_stats(*arg, "  " + context->stage + " forest", true, show_tree_, show_deriv_, extract_rules_, extract_file)
+      std::cerr << viterbi_stats(*arg, "  " + context->stage + " forest", true, show_tree_, show_deriv_)
                 << std::endl;
     }
     return arg;
   }
 
  private:
-  bool show_tree_, show_deriv_, extract_rules_;
-  std::string extract_path_;
+  bool show_tree_, show_deriv_;
 };
 
 struct ShouldShowExpectedLength : Pipe<ShouldShowExpectedLength> {
