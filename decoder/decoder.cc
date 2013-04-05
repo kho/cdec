@@ -187,6 +187,9 @@ struct DecoderImpl {
   }
   void SetId(int next_sent_id) { sent_id = next_sent_id - 1; }
 
+  void AddSupplementalGrammar(boost::shared_ptr<Grammar> gp);
+  void AddSupplementalGrammarFromString(const std::string& grammar_string);
+
   void forest_stats(Hypergraph &forest,string name,bool show_tree,bool show_deriv=false, bool extract_rules=false, boost::shared_ptr<WriteFile> extract_file = boost::make_shared<WriteFile>()) {
     cerr << viterbi_stats(forest,name,true,show_tree,show_deriv,extract_rules, extract_file);
     cerr << endl;
@@ -214,7 +217,7 @@ struct DecoderImpl {
       }
       forest.PruneInsideOutside(beam_prune,density_prune,pm,false,1);
       if (!forestname.empty()) forestname=" "+forestname;
-      if (!SILENT) { 
+      if (!SILENT) {
         forest_stats(forest,"  Pruned "+forestname+" forest",false,false);
         cerr << "  Pruned "<<forestname<<" forest portion of edges kept: "<<forest.edges_.size()/presize<<endl;
       }
@@ -280,7 +283,7 @@ struct DecoderImpl {
       assert(ref);
       LatticeTools::ConvertTextOrPLF(sref, ref);
     }
-  } 
+  }
 
   // used to construct the suffix string to get the name of arguments for multiple passes
   // e.g., the "2" in --weights2
@@ -308,7 +311,7 @@ struct DecoderImpl {
   boost::shared_ptr<RandomNumberGenerator<boost::mt19937> > rng;
   int sample_max_trans;
   bool aligner_mode;
-  bool graphviz; 
+  bool graphviz;
   bool joshua_viz;
   bool encode_b64;
   bool kbest;
@@ -327,7 +330,8 @@ struct DecoderImpl {
   bool output_training_vector; // TODO Observer
   bool remove_intersected_rule_annotations;
   boost::scoped_ptr<IncrementalBase> incremental;
-
+  bool mira_compat;
+  bool mr_compat;
 
   static void ConvertSV(const SparseVector<prob_t>& src, SparseVector<double>* trg) {
     for (SparseVector<prob_t>::const_iterator it = src.begin(); it != src.end(); ++it)
@@ -439,7 +443,10 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
         ("vector_format",po::value<string>()->default_value("b64"), "Sparse vector serialization format for feature expectations or gradients, includes (text or b64)")
         ("combine_size,C",po::value<int>()->default_value(1), "When option -G is used, process this many sentence pairs before writing the gradient (1=emit after every sentence pair)")
         ("forest_output,O",po::value<string>(),"Directory to write forests to")
-        ("remove_intersected_rule_annotations", "After forced decoding is completed, remove nonterminal annotations (i.e., the source side spans)");
+        ("remove_intersected_rule_annotations", "After forced decoding is completed, remove nonterminal annotations (i.e., the source side spans)")
+      ("mira_compat", "MIRA compatibility mode (applies weight delta if available; outputs number of lines before k-best).")
+      ("mr_compat", "MapReduce compatibility mode (reads per-sentence grammar from input)")
+      ;
 
   // ob.AddOptions(&opts);
 #ifdef FSA_RESCORING
@@ -715,6 +722,8 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
   get_oracle_forest = conf.count("get_oracle_forest");
   oracle.show_derivation=conf.count("show_derivations");
   remove_intersected_rule_annotations = conf.count("remove_intersected_rule_annotations");
+  mira_compat = conf.count("mira_compat");
+  mr_compat = conf.count("mr_compat");
 
 #ifdef FSA_RESCORING
   cfg_options.Validate();
@@ -750,15 +759,35 @@ bool Decoder::Decode(const string& input, DecoderObserver* o) {
 vector<weight_t>& Decoder::CurrentWeightVector() { return pimpl_->CurrentWeightVector(); }
 const vector<weight_t>& Decoder::CurrentWeightVector() const { return pimpl_->CurrentWeightVector(); }
 void Decoder::AddSupplementalGrammar(GrammarPtr gp) {
-  static_cast<SCFGTranslator&>(*pimpl_->translator).AddSupplementalGrammar(gp);
+  pimpl_->AddSupplementalGrammar(gp);
 }
 void Decoder::AddSupplementalGrammarFromString(const std::string& grammar_string) {
-  assert(pimpl_->translator->GetDecoderType() == "SCFG");
-  static_cast<SCFGTranslator&>(*pimpl_->translator).AddSupplementalGrammarFromString(grammar_string);
+  pimpl_->AddSupplementalGrammarFromString(grammar_string);
+}
+
+void DecoderImpl::AddSupplementalGrammar(GrammarPtr gp) {
+  static_cast<SCFGTranslator&>(*translator).AddSupplementalGrammar(gp);
+}
+void DecoderImpl::AddSupplementalGrammarFromString(const std::string& grammar_string) {
+  assert(translator->GetDecoderType() == "SCFG");
+  static_cast<SCFGTranslator&>(*translator).AddSupplementalGrammarFromString(grammar_string);
 }
 
 bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
   string buf = input;
+  if (mr_compat) {
+    // Strip off per-sentence grammar if given
+    // Message format: input\tgrammar
+    size_t first_tab = buf.find('\t');
+    if (first_tab != string::npos) {
+      string grammar = buf.substr(first_tab + 1); grammar.append("\n");
+      buf.erase(first_tab);
+      replace(grammar.begin(), grammar.end(), '\t', '\n');
+      cerr << "[mr input] " << buf << endl;
+      AddSupplementalGrammarFromString(grammar);
+    }
+  }
+
   NgramCache::Clear();   // clear ngram cache for remote LM (if used)
   Timer::Summarize();
   ++sent_id;
@@ -766,6 +795,24 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
   ProcessAndStripSGML(&buf, &sgml);
   if (sgml.find("id") != sgml.end())
     sent_id = atoi(sgml["id"].c_str());
+
+  if (mira_compat) {
+    // Add delta from input to weights before decoding
+    istringstream delta_in(sgml["delta"]);
+    string feat_name;
+    weight_t feat_delta;
+    while (delta_in >> feat_name >> feat_delta) {
+      int feat_id = FD::Convert(feat_name);
+      if (init_weights->size() <= feat_id)
+        init_weights->resize(feat_id + 1);
+      cerr.precision(17);
+      if (!SILENT)
+        cerr << "[weight update] " << feat_name << ": " << (*init_weights)[feat_id] << " + " << feat_delta << " = ";
+      (*init_weights)[feat_id] += feat_delta;
+      if (!SILENT)
+        cerr << (*init_weights)[feat_id] << endl;
+    }
+  }
 
   if (!SILENT) {
     cerr << "\nINPUT: ";
