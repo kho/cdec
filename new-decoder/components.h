@@ -105,9 +105,32 @@ typedef
 StdOutputSent;
 
 //
+// Free memory at the end
+//
+template <class T>
+struct FreePointer : Pipe<FreePointer<T> > {
+  typedef T *itype;
+  typedef Void otype;
+  static void Register(OptDesc */*opts*/) {}
+  FreePointer(const VarMap &/*conf*/, Context */*context*/) {}
+  otype Apply(const Input &/*input*/, Context */*context*/, itype arg) const {
+    delete arg;
+    return Void();
+  }
+};
+
+typedef Lift<FreePointer<Hypergraph> > StdCleanUp;
+
+//
 // Standard translation pipeline
 //
-typedef StdInitForest::PIPE_BIND(Std3PassRescore)::PIPE_BIND(StdRefIntersect)::PIPE_COMP(StdOutputSent) StdDecode;
+typedef
+  StdInitForest::
+  PIPE_BIND(Std3PassRescore)::
+  PIPE_BIND(StdRefIntersect)::
+  PIPE_COMP(StdOutputSent)::
+  PIPE_BIND(StdCleanUp)
+StdDecode;
 
 } // namespace pipeline
 
