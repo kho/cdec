@@ -253,17 +253,25 @@ struct OracleBleu {
 
   bool show_derivation;
   template <class Filter>
-  void kbest(int sent_id,Hypergraph const& forest,int k,std::ostream &kbest_out=std::cout,std::ostream &deriv_out=std::cerr) {
+  void kbest(int sent_id, Hypergraph const& forest,
+             int k, bool mira_compat, int src_len,
+             std::ostream &kbest_out=std::cout, std::ostream &deriv_out=std::cerr) {
     using namespace std;
     using namespace boost;
     typedef KBest::KBestDerivations<Sentence, ESentenceTraversal,Filter> K;
     K kbest(forest,k);
     //add length (f side) src length of this sentence to the psuedo-doc src length count
     float curr_src_length = doc_src_length + tmp_src_length;
-    for (int i = 0; i < k; ++i) {
+    if (mira_compat)
+      kbest_out << k << "\n";
+    int i = 0;
+    for (; i < k; ++i) {
       typename K::Derivation *d = kbest.LazyKthBest(forest.nodes_.size() - 1, i);
       if (!d) break;
-      kbest_out << sent_id << " ||| " << TD::GetString(d->yield) << " ||| "
+      kbest_out << sent_id << " ||| ";
+      if (mira_compat)
+        kbest_out << src_len << " ||| ";
+      kbest_out << TD::GetString(d->yield) << " ||| "
                 << d->feature_values << " ||| " << log(d->score);
       if (!refs.empty()) {
         ScoreP sentscore = GetScore(d->yield,sent_id);
@@ -279,10 +287,17 @@ struct OracleBleu {
         deriv_out<<"\n"<<flush;
       }
     }
+    if (mira_compat) {
+      for (; i < k; ++i)
+        kbest_out << "\n";
+      kbest_out << flush;
+    }
   }
 
 // TODO decoder output should probably be moved to another file - how about oracle_bleu.h
-  void DumpKBest(const int sent_id, const Hypergraph& forest, const int k, const bool unique, std::string const &kbest_out_filename_, std::string const &deriv_out_filename_) {
+  void DumpKBest(const int sent_id, const Hypergraph& forest,
+                 const int k, const bool unique, bool mira_compat, int src_len,
+                 std::string const &kbest_out_filename_, std::string const &deriv_out_filename_) {
 
     WriteFile ko(kbest_out_filename_);
     std::cerr << "Output kbest to " << kbest_out_filename_ <<std::endl;
@@ -295,9 +310,9 @@ struct OracleBleu {
     WriteFile oderiv(sderiv.str());
 
     if (!unique)
-      kbest<KBest::NoFilter<std::vector<WordID> > >(sent_id,forest,k,ko.get(),oderiv.get());
+      kbest<KBest::NoFilter<std::vector<WordID> > >(sent_id,forest,k,mira_compat,src_len,ko.get(),oderiv.get());
     else {
-      kbest<KBest::FilterUnique>(sent_id,forest,k,ko.get(),oderiv.get());
+      kbest<KBest::FilterUnique>(sent_id,forest,k,mira_compat,src_len,ko.get(),oderiv.get());
     }
   }
 
@@ -305,7 +320,7 @@ void DumpKBest(std::string const& suffix,const int sent_id, const Hypergraph& fo
   {
     std::ostringstream kbest_string_stream;
     kbest_string_stream << forest_output << "/kbest_"<<suffix<< "." << sent_id;
-    DumpKBest(sent_id, forest, k, unique, kbest_string_stream.str(), "-");
+    DumpKBest(sent_id, forest, k, unique, false, 0, kbest_string_stream.str(), "-");
   }
 
 };

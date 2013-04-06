@@ -1055,7 +1055,9 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
     if (kbest && !has_ref) {
       //TODO: does this work properly?
       const string deriv_fname = conf.count("show_derivations") ? str("show_derivations",conf) : "-";
-      oracle.DumpKBest(sent_id, forest, conf["k_best"].as<int>(), unique_kbest,"-", deriv_fname);
+      oracle.DumpKBest(sent_id, forest, conf["k_best"].as<int>(),
+                       unique_kbest, mira_compat, smeta.GetSourceLength(),
+                       "-", deriv_fname);
     } else if (csplit_output_plf) {
       cout << HypergraphIO::AsPLF(forest, false) << endl;
     } else {
@@ -1180,7 +1182,9 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
       if (conf.count("graphviz")) forest.PrintGraphviz();
       if (kbest) {
         const string deriv_fname = conf.count("show_derivations") ? str("show_derivations",conf) : "-";
-        oracle.DumpKBest(sent_id, forest, conf["k_best"].as<int>(), unique_kbest,"-", deriv_fname);
+        oracle.DumpKBest(sent_id, forest, conf["k_best"].as<int>(),
+                         unique_kbest, mira_compat, smeta.GetSourceLength(),
+                         "-", deriv_fname);
       }
       if (conf.count("show_conditional_prob")) {
         const prob_t ref_z = Inside<prob_t, EdgeProb>(forest);
