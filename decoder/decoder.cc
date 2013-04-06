@@ -5,6 +5,7 @@
 #include <boost/program_options/variables_map.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/scoped_ptr.hpp>
+#include <boost/scoped_array.hpp>
 
 #include "program_options.h"
 #include "stringlib.h"
@@ -13,6 +14,7 @@
 #include "fdict.h"
 #include "timing_stats.h"
 #include "verbose.h"
+#include "b64tools.h"
 
 #include "translator.h"
 #include "phrasebased_translator.h"
@@ -773,6 +775,29 @@ void DecoderImpl::AddSupplementalGrammarFromString(const std::string& grammar_st
   static_cast<SCFGTranslator&>(*translator).AddSupplementalGrammarFromString(grammar_string);
 }
 
+static inline void ApplyWeightDelta(const string &delta_b64, vector<weight_t> *weights) {
+  if (delta_b64.empty()) return;
+  // Decode data
+  size_t b64_len = delta_b64.size(), len = b64_len / 4 * 3;
+  boost::scoped_array<char> buf(new char[len]);
+  assert(B64::b64decode(reinterpret_cast<const unsigned char *>(delta_b64.data()), b64_len, buf.get(), len));
+  // Apply updates
+  size_t cur = 0;
+  while (cur < len) {
+    string feat_name(buf.get() + cur);
+    if (feat_name.empty()) break;        // Encountered trailing \0
+    int feat_id = FD::Convert(feat_name);
+    weight_t feat_delta = *reinterpret_cast<weight_t *>(buf.get() + cur + feat_name.size() + 1);
+    if (weights->size() <= feat_id) weights->resize(feat_id + 1);
+    cerr.precision(17);
+    if (!SILENT)
+      cerr << "[decoder weight update] " << feat_name << " " << feat_delta
+           << " = " << hex << *reinterpret_cast<unsigned long long *>(&feat_delta) << endl;
+    (*weights)[feat_id] += feat_delta;
+    cur += feat_name.size() + 1 + sizeof(weight_t);
+  }
+}
+
 bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
   string buf = input;
   if (mr_compat) {
@@ -796,23 +821,9 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
   if (sgml.find("id") != sgml.end())
     sent_id = atoi(sgml["id"].c_str());
 
-  if (mira_compat) {
-    // Add delta from input to weights before decoding
-    istringstream delta_in(sgml["delta"]);
-    string feat_name;
-    weight_t feat_delta;
-    while (delta_in >> feat_name >> feat_delta) {
-      int feat_id = FD::Convert(feat_name);
-      if (init_weights->size() <= feat_id)
-        init_weights->resize(feat_id + 1);
-      cerr.precision(17);
-      if (!SILENT)
-        cerr << "[weight update] " << feat_name << ": " << (*init_weights)[feat_id] << " + " << feat_delta << " = ";
-      (*init_weights)[feat_id] += feat_delta;
-      if (!SILENT)
-        cerr << (*init_weights)[feat_id] << endl;
-    }
-  }
+  // Add delta from input to weights before decoding
+  if (mira_compat)
+    ApplyWeightDelta(sgml["delta"], init_weights.get());
 
   if (!SILENT) {
     cerr << "\nINPUT: ";
