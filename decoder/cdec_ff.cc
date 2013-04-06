@@ -71,6 +71,7 @@ void register_feature_functions() {
   ff_registry.Register("InputIndicator", new FFFactory<InputIndicator>);
   ff_registry.Register("LexicalTranslationTrigger", new FFFactory<LexicalTranslationTrigger>);
   ff_registry.Register("WordPairFeatures", new FFFactory<WordPairFeatures>);
+  ff_registry.Register("WordPairsFeatures", new FFFactory<WordPairsFeatures>);
   ff_registry.Register("SourcePathFeatures", new FFFactory<SourcePathFeatures>);
   ff_registry.Register("WordSet", new FFFactory<WordSet>);
   ff_registry.Register("Dwarf", new FFFactory<Dwarf>);

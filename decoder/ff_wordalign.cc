@@ -259,7 +259,7 @@ void NewJump::FireFeature(const SentenceMetadata& smeta,
     if (f0_)    os << ':' << TD::Convert(get<4>(key));
     if (fm1_)   os << ':' << TD::Convert(get<5>(key));
     if (fp1_)   os << ':' << TD::Convert(get<6>(key));
-    if (fprev_) os << ':' << TD::Convert(get<7>(key));    
+    if (fprev_) os << ':' << TD::Convert(get<7>(key));
     fid = FD::Convert(os.str());
   }
   features->set_value(fid, 1.0);
@@ -407,8 +407,8 @@ LexicalTranslationTrigger::LexicalTranslationTrigger(const std::string& param) :
     }
   }
 }
-  
-void LexicalTranslationTrigger::FireFeature(WordID trigger, 
+
+void LexicalTranslationTrigger::FireFeature(WordID trigger,
                                      WordID src,
                                      WordID trg,
                                      SparseVector<double>* features) const {
@@ -438,7 +438,7 @@ void LexicalTranslationTrigger::TraversalFeaturesImpl(const SentenceMetadata& sm
   if (edge.Arity() == 0) {
     assert(edge.rule_->EWords() == 1);
     assert(edge.rule_->FWords() == 1);
-    WordID trg = edge.rule_->e()[0]; 
+    WordID trg = edge.rule_->e()[0];
     WordID src = edge.rule_->f()[0];
     assert(triggers_.size() > smeta.GetSentenceID());
     const vector<WordID>& triggers = triggers_[smeta.GetSentenceID()];
@@ -603,10 +603,596 @@ void InputIndicator::TraversalFeaturesImpl(const SentenceMetadata& smeta,
     if (f > 0) FireFeature(f, features);
   }
 }
+void WordPairsFeatures::PrepareForInput(const SentenceMetadata& smeta) {
+  lexmap_->PrepareForInput(smeta);
+}
+
+WordPairsFeatures::WordPairsFeatures(const string& param) :
+    FeatureFunction(sizeof(WordID) + sizeof(int)) {
+  vector<string> argv;
+  fid_str_ = "WPF:";
+
+  lexmap_.reset(new FactoredLexiconHelper);
+  //on target side
+  fid_strb_ = "TB:";
+  fid_strc_ = "WPC:";
+  fid_stri_ = "IN:";
+  fid_strd_ = "DEL:";
+  // int argc = SplitOnWhitespace(param, &argv);
+  SplitOnWhitespace(param, &argv);
+  //  if (argc != 1) {
+  // cerr << "WordPairFeatures /path/to/feature_values.table\n";
+  //  abort();
+  // }
+  set<WordID> all_srcs;
+  set<WordID> all_trgs;
+  const WordID kBARRIER = TD::Convert("|||");
+
+  /* read in top trg insert words
+   */
+  if(true)
+  {
+    ReadFile rf(argv[1]);
+    istream& in = *rf.stream();
+    string buf;
+    while (in) {
+      getline(in, buf);
+      if (buf.empty()) continue;
+      int start = 0;
+      while(start < buf.size() && buf[start] == ' ') ++start;
+      int end = start;
+      while(end < buf.size() && buf[end] != ' ') ++end;
+      const WordID trg = TD::Convert(buf.substr(start, end - start));
+      if (trg == kBARRIER) {
+        continue;
+      }
+      //cerr << "GOT " << TD::Convert(trg);
+      end += 1;
+      start = end;
+
+      while(end < buf.size() && buf[end] != ' ') ++end;
+      WordID x = TD::Convert(buf.substr(start, end - start));
+      if (x != kBARRIER) {
+        cerr << "1 Format error: " << buf << endl;
+        abort();
+      }
+      start = end + 1;
+      end = start + 1;
+      // while(end < buf.size() && buf[end] != ' ') ++end;
+      //start = end + 1;
+      while(start < buf.size() && buf[start] == ' ') ++start;
+      end = start + 1;
+      while(end < buf.size() && buf[end] != ' ') ++end;
+      assert(end > start);
+      if (end < buf.size()) buf[end] = 0;
+      double val = strtod(&buf.c_str()[start], NULL);
+
+      //cerr << "VAL " <<val << endl;
+      trg_values_.insert(pair<WordID, double >(trg,val));
+    }
+  }
+
+  /* read in top src deletion words
+   */
+  if(true)
+  {
+    ReadFile rf(argv[2]);
+    istream& in = *rf.stream();
+    string buf;
+    while (in) {
+      getline(in, buf);
+      if (buf.empty()) continue;
+      int start = 0;
+      while(start < buf.size() && buf[start] == ' ') ++start;
+      int end = start;
+      while(end < buf.size() && buf[end] != ' ') ++end;
+      const WordID src = TD::Convert(buf.substr(start, end - start));
+      if (src == kBARRIER) {
+        continue;
+      }
+      //cerr << "GOT " << TD::Convert(trg);
+      end += 1;
+      start = end;
+
+      while(end < buf.size() && buf[end] != ' ') ++end;
+      WordID x = TD::Convert(buf.substr(start, end - start));
+      if (x != kBARRIER) {
+        cerr << "1 Format error: " << buf << endl;
+        abort();
+      }
+      start = end + 1;
+      end = start + 1;
+      // while(end < buf.size() && buf[end] != ' ') ++end;
+      //start = end + 1;
+      while(start < buf.size() && buf[start] == ' ') ++start;
+      end = start + 1;
+      while(end < buf.size() && buf[end] != ' ') ++end;
+      assert(end > start);
+      if (end < buf.size()) buf[end] = 0;
+      double val = strtod(&buf.c_str()[start], NULL);
+
+      //cerr << "VAL " <<val << endl;
+      src_values_.insert(pair<WordID, double >(src,val));
+    }
+  }
+
+
+
+  /* read in word pairs
+   */
+  if(true)
+  {
+    {
+
+      ReadFile rf(argv[0]);
+      istream& in = *rf.stream();
+      string buf;
+      while (in) {
+        getline(in, buf);
+        if (buf.empty()) continue;
+        int start = 0;
+        while(start < buf.size() && buf[start] == ' ') ++start;
+        int end = start;
+        while(end < buf.size() && buf[end] != ' ') ++end;
+        const WordID src = TD::Convert(buf.substr(start, end - start));
+        if (src == kBARRIER) {
+          continue;
+        }
+        all_srcs.insert(src);
+      }
+    }
+    if (all_srcs.empty()) {
+      cerr << "WordPairFeature " << param << " loaded empty file!\n";
+      return;
+    }
+    fkeys_.reserve(all_srcs.size());
+    copy(all_srcs.begin(), all_srcs.end(), back_inserter(fkeys_));
+    values_.resize(all_srcs.size());
+    { cerr << "WordPairFeature: " << all_srcs.size() << " sources\n"; }
+
+    // double val = 0;
+
+    map<WordID, double> *pv = NULL;
+
+    ReadFile rf(argv[0]);
+    istream& in = *rf.stream();
+    string buf;
+    while(in)
+    {
+      getline(in,buf);
+      if(buf.empty()) continue;
+      int start = 0;
+      //if(buf[start] == ' ')
+      //   cerr << "empty " << endl;
+
+      //find src
+      while(start < buf.size() && buf[start] == ' ') ++start;
+      int end = start;
+      while(end < buf.size() && buf[end] != ' ') ++end;
+      const WordID src = TD::Convert(buf.substr(start, end - start));
+      if (src == kBARRIER) {
+        continue;
+      }
+      size_t ind = distance(fkeys_.begin(), lower_bound(fkeys_.begin(), fkeys_.end(), src));
+      pv = &values_[ind];
+      //cerr << "got " << TD::Convert(src) << " ind " << ind << " ";
+
+      end += 1;
+      start = end;
+
+      //find |||
+      while(end < buf.size() && buf[end] != ' ') ++end;
+      WordID x = TD::Convert(buf.substr(start, end - start));
+      if (x != kBARRIER) {
+        cerr << "1 Format error: " << buf << endl;
+        abort();
+      }
+      start = end + 1;
+      end = start + 1;
+
+      //find trg
+      while(end < buf.size() && buf[end] != ' ') ++end;
+      WordID trg = TD::Convert(buf.substr(start, end - start));
+      //cerr << "got " << TD::Convert(trg);
+      all_trgs.insert(trg);
+
+
+      /*end += 1;
+        start = end;
+        //find |||
+        while(end < buf.size() && buf[end] != ' ') ++end;
+        x = TD::Convert(buf.substr(start, end - start));
+        if (x != kBARRIER) {
+        cerr << "1 Format error: " << buf << endl;
+        abort();
+        }
+        start = end + 1;
+        end = start + 1;
+        //find context word
+        while(end < buf.size() && buf[end] != ' ') ++end;
+        WordID src_context = TD::Convert(buf.substr(start, end - start));
+
+      */
+      start = end + 1;
+      end = start + 1;
+      while(end < buf.size() && buf[end] != ' ' && buf[end] != '=') ++end;
+      start = end + 1;
+      while(start < buf.size() && buf[start] == ' ') ++start;
+      end = start + 1;
+      while(end < buf.size() && buf[end] != ' ') ++end;
+      assert(end > start);
+      if (end < buf.size()) buf[end] = 0;
+      double val = strtod(&buf.c_str()[start], NULL);
+
+      //TODO handle context
+      //cerr << "got " << val << endl;
+      pv->insert(pair<WordID, double >(trg,val));
+
+    }
+  }
+  map<WordID,double>::iterator it;
+  //cerr << "Here " << endl;
+
+  /*     for (int i =0;i<values_.size(); i++)
+         {
+	 cerr << "SRC" << i << " -- ";
+	 for(it=values_[i].begin(); it != values_[i].end(); it++)
+         {
+         cerr<<TD::Convert((*it).first) << "=>" << (*it).second << " || ";
+         }
+	 cerr << endl;
+	 }*/
+}
+
+void WordPairsFeatures::FireFeatureBigram(WordID left,
+					  WordID right,
+					  SparseVector<double>* features) const {
+
+  //check if words are in top k list, if not, replace with <unk>
+
+  int& fid = fmapb_[left][right];
+
+  if (!fid) {
+    ostringstream os;
+    os << fid_strb_ << ":";
+    os << ":" << TD::Convert(left);
+    os << ":" << TD::Convert(right);
+    fid = FD::Convert(os.str());
+    //    if (fid == 0) fid = -1;
+    //cerr << "Feature " << fid << " " << os.str() << endl;
+  }
+
+  features->set_value(fid, 1.0);
+}
+
+void WordPairsFeatures::FireFeatureContext(const WordID src,
+                                           const WordID src_context,
+                                           const WordID trg,
+                                           const int context,
+                                           SparseVector<double>* features) const {
+
+  int& fid = fmapc_[context][src][src_context][trg];
+  if(!fid)
+  {
+    ostringstream os;
+    os << fid_strc_ << ":" << context << ':';
+    os <<  TD::Convert(src) << ":" << TD::Convert(trg) << ":" << TD::Convert(src_context);
+    fid = FD::Convert(os.str());
+
+  }
+  //  cerr << "Feature " << fid << " " << FD::Convert(fid) << endl;
+  features->set_value(fid, 1);
+
+}
+
+void WordPairsFeatures::FireFeature(const WordID src,
+				    const WordID trg,
+				    double val,
+				    SparseVector<double>* features) const {
+
+
+
+  int& fid = fmap_[src][trg];
+  if(!fid)
+  {
+    ostringstream os;
+    os << fid_str_ << ':';
+    os <<  TD::Convert(src) << ":" << TD::Convert(trg);
+    fid = FD::Convert(os.str());
+    //    cerr << "Feature " << fid << " " << os.str() << " " << val << endl;
+  }
+
+  features->set_value(fid, val);
+
+}
+
+
+void WordPairsFeatures::FireFeatureInsert(const WordID src,
+                                          const WordID trg,
+                                          SparseVector<double>* features) const {
+  int& fid = fmapi_[src][trg];
+  if(!fid)
+  {
+    ostringstream os;
+    os << fid_stri_ << ':';
+    //      os <<  TD::Convert(src) << ":" << TD::Convert(trg);
+    os << TD::Convert(trg);
+    fid = FD::Convert(os.str());
+    //cerr << "Feature " << fid << " " << os.str() << endl;
+  }
+
+  features->set_value(fid, 1.0);
+
+}
+
+void WordPairsFeatures::FireFeatureDelete(const WordID src,
+                                          const WordID trg,
+                                          SparseVector<double>* features) const {
+  int& fid = fmapd_[src][trg];
+  if(!fid)
+  {
+    ostringstream os;
+    os << fid_strd_ << ':';
+    //      os <<  TD::Convert(src) << ":" << TD::Convert(trg);
+    os << TD::Convert(src);
+    fid = FD::Convert(os.str());
+    //cerr << "Feature " << fid << " " << os.str() << endl;
+  }
+
+  features->set_value(fid, 1.0);
+
+}
+
+
+void WordPairsFeatures::TraversalFeaturesImpl(const SentenceMetadata& smeta,
+                                              const Hypergraph::Edge& edge,
+                                              const std::vector<const void*>& ant_contexts,
+                                              SparseVector<double>* features,
+                                              SparseVector<double>* estimated_features,
+                                              void* context) const {
+
+  vector<AlignmentPoint> als =  edge.rule_->als();
+  map<WordID, int> insert_e;
+  map<WordID, int> delete_f;
+  TRule r = *edge.rule_;
+  //cerr <<" || " << r.AsString() <<" || " << endl;
+  const int arity = edge.Arity();
+
+  WordID& out_context = *static_cast<WordID*>(context);
+  int& out_word_count = *(static_cast<int*>(context) + 1);
+  if (arity == 0) {
+    //cerr<<"Ar 0" << endl;
+    out_context = lexmap_->SourceWordAtPosition(edge.i_);
+    out_word_count = edge.rule_->EWords();
+
+  } else if (arity == 1) {
+    //cerr <<"ar 1 " << endl;
+    WordID left = *static_cast<const WordID*>(ant_contexts[0]);
+    int left_wc = *(static_cast<const int*>(ant_contexts[0]) + 1);
+    out_context = left;
+    out_word_count = left_wc;
+    //cerr << "L" << TD::Convert(left) << " " << left_wc << endl;
+
+  } else if (arity == 2) {
+    //cerr <<"ar 2" << endl;
+    // WordID left = *static_cast<const WordID*>(ant_contexts[0]);
+    WordID right = *static_cast<const WordID*>(ant_contexts[1]);
+    int left_wc = *(static_cast<const int*>(ant_contexts[0]) + 1);
+    int right_wc = *(static_cast<const int*>(ant_contexts[0]) + 1);
+    //cerr << "L" << TD::Convert(left) << " R " << TD::Convert(right) << " " <<  left_wc << " " << right_wc << endl;
+    out_word_count = left_wc + right_wc;
+    out_context = right;
+
+  }
+
+  const vector<WordID>& e = edge.rule_->e();
+  const vector<WordID>& f = edge.rule_->f();
+  vector<int> nont_pos;
+
+  for (int i = 0; i < f.size(); ++i) {
+    if (f[i] < 0) {
+      nont_pos.push_back(i);
+    }
+  }
+
+  for (vector<AlignmentPoint>::const_iterator i = als.begin(); i != als.end(); ++i)
+  {
+    WordID trg = edge.rule_->e()[i->t_];
+    WordID src = edge.rule_->f()[i->s_];
+    //cerr << "A " << i->s_ << " " << i->t_ << " " <<" " << TD::Convert(trg) << " " << TD::Convert(src) << endl;
+    insert_e[trg]=i->t_;
+    delete_f[src]=i->s_;
+
+    //check if word pair is in top k word pairs
+    size_t ind = distance(fkeys_.begin(), lower_bound(fkeys_.begin(), fkeys_.end(), src));
+    if (ind == fkeys_.size() || fkeys_[ind] != src) {
+      src = TD::Convert("<unk>");
+      trg = TD::Convert("<unk>");
+    }
+    else {
+      //check for matching trg word
+      const map<WordID, double >::const_iterator it = values_[ind].find(trg);
+      if (it == values_[ind].end())
+        trg = TD::Convert("<unk>");
+    }
+
+    //check if source has context
+    //left context
+    if (i->s_> 0){
+      int indl = i->s_ -1;
+      WordID src_context;
+      if(f[indl] < 1){
+        //nonterminal
+        if (arity == 1) {
+          src_context = *static_cast<const WordID*>(ant_contexts[0]);
+          //  cerr<<"asleft=" << TD::Convert(src_context) << endl;
+        }
+        else if (arity == 2) {
+          if(indl == nont_pos.at(1)) {
+            src_context = *static_cast<const WordID*>(ant_contexts[1]);
+            //	cerr<<"a21sleft=" << TD::Convert(src_context) << endl;
+          }
+          else {
+            src_context = *static_cast<const WordID*>(ant_contexts[0]);
+            //	cerr<<"a20sleft=" << TD::Convert(src_context) << endl;
+          }
+        }
+      }
+      else {
+        //terminal
+        src_context = f[indl];
+        // cerr<<"sleft=" << TD::Convert(src_context) << endl;
+      }
+
+      size_t inds = distance(fkeys_.begin(), lower_bound(fkeys_.begin(), fkeys_.end(), src_context));
+      if (inds == fkeys_.size() || fkeys_[inds] != src_context) {
+        src_context = TD::Convert("<unk>");
+      }
+
+
+      FireFeatureContext(src,src_context,trg,0,features);
+
+    }
+
+
+    //right context
+    if (i->s_+ 1 < f.size()){
+      int indl = i->s_ + 1;
+      WordID src_context;
+      if(f[indl] < 1){
+        //nonterminal
+        if (arity == 1) {
+          src_context = *static_cast<const WordID*>(ant_contexts[0]);
+          // cerr<<"asright=" << TD::Convert(src_context) << endl;
+        }
+        else if (arity == 2) {
+          if(indl == nont_pos.at(1)) {
+            src_context = *static_cast<const WordID*>(ant_contexts[1]);
+            //	cerr<<"a21sright=" << TD::Convert(src_context) << endl;
+          }
+          else {
+            src_context = *static_cast<const WordID*>(ant_contexts[0]);
+            //	cerr<<"a20sright=" << TD::Convert(src_context) << endl;
+          }
+        }
+      }
+      else {
+        //terminal
+        // WordID src_context = f[indl];
+        // cerr<<"sright=" << TD::Convert(src_context) << endl;
+      }
+
+
+      size_t inds = distance(fkeys_.begin(), lower_bound(fkeys_.begin(), fkeys_.end(), src_context));
+      if (inds == fkeys_.size() || fkeys_[inds] != src_context) {
+        src_context = TD::Convert("<unk>");
+      }
+
+      FireFeatureContext(src,src_context,trg,1,features);
+    }
+
+
+    //check if word pair is in top k word pairs
+    /*size_t ind = distance(fkeys_.begin(), lower_bound(fkeys_.begin(), fkeys_.end(), src));
+      if (ind == fkeys_.size() || fkeys_[ind] != src) {
+      //cerr << "WordPairFeatures no source entries for " << TD::Convert(src) << endl;
+      // abort();
+      }
+      else
+      {
+      //check for matching trg word
+      const map<WordID, double >::const_iterator it = values_[ind].find(trg);
+
+      if (it != values_[ind].end())
+      { //	(*features) += it->second;*/
+    //FireFeature(src,trg,1, features);
+    //		FireFeature(src,trg,it->second, features);
+    /*			      }
+                              }*/
+  }
+
+
+
+  int counter=0;
+  //cerr <<  edge.rule_->EWords()<< " " << edge.rule_->FWords()<<endl;
+
+  //lexical item present on the source side but not on the target
+  for (vector<WordID>::const_iterator j = f.begin(); j != f.end(); ++j)  {
+    const WordID& k = *j;
+    if(!delete_f.count(k))
+    {
+      const map<WordID, double >::const_iterator it = src_values_.find(k);
+
+      if(it != src_values_.end())
+        FireFeatureDelete(k,k,features);
+    }
+  }
+
+
+
+  for (vector<WordID>::const_iterator i = e.begin(); i != e.end(); ++i)
+  {
+    const WordID& c = *i;
+
+    //terminal
+    if(c > 0)
+    {
+      const map<WordID, double >::const_iterator it = trg_values_.find(c);
+      //cerr << "W:" << TD::Convert(c) << endl;
+      if (i+1 != e.end())
+        if(e[counter+1]>0)
+        {
+          //check
+          // const map<WordID, double >::const_iterator it2=  trg_values_.find(e[counter+1]);
+          WordID l = c;
+          WordID r = e[counter+1];
+          /*		  if(it == trg_values_.end())
+                          {l = TD::Convert("<unk>");}
+                          if(it2 == trg_values_.end())
+                          {r = TD::Convert("<unk>");}*/
+          FireFeatureBigram(l,r, features);
+        }
+      //check whether its aligned, if not, then this target word was inserted without any source word
+      if(!insert_e.count(c))
+      {
+        if(it != trg_values_.end())
+          FireFeatureInsert(c,c,features);
+        //		cerr <<"not aligned" << TD::Convert(c) << endl;
+
+        /*for (vector<WordID>::const_iterator j = f.begin(); j != f.end(); ++j)
+          {
+          const WordID& k = *j;
+          if (k > 0)
+          {
+          //check
+          //			const map<WordID, double >::const_iterator it = trg_values_.find(c);
+          if(it != trg_values_.end())//
+          //		  FireFeatureInsert(c,k,features);
+
+          }
+          }*/
+      }
+    }
+
+    //nonterminal
+    else {
+      //cerr <<" N ";
+
+    }
+    counter++;
+  }
+  //    cerr << endl;
+
+
+}
+
+int WordPairsFeatures::StateSize(const void* state, int size_) const {
+  return *(static_cast<const char*>(state) + size_);
+}
 
 WordPairFeatures::WordPairFeatures(const string& param) {
   vector<string> argv;
-  int argc = SplitOnWhitespace(param, &argv); 
+  int argc = SplitOnWhitespace(param, &argv);
   if (argc != 1) {
     cerr << "WordPairFeature /path/to/feature_values.table\n";
     abort();
@@ -709,7 +1295,7 @@ void WordPairFeatures::TraversalFeaturesImpl(const SentenceMetadata& smeta,
   if (edge.Arity() == 0) {
     assert(edge.rule_->EWords() == 1);
     assert(edge.rule_->FWords() == 1);
-    const WordID trg = edge.rule_->e()[0]; 
+    const WordID trg = edge.rule_->e()[0];
     const WordID src = edge.rule_->f()[0];
     size_t ind = distance(fkeys_.begin(), lower_bound(fkeys_.begin(), fkeys_.end(), src));
     if (ind == fkeys_.size() || fkeys_[ind] != src) {

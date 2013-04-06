@@ -253,6 +253,64 @@ class InputIndicator : public FeatureFunction {
   mutable Class2FID fmap_;
 };
 
+class WordPairsFeatures : public FeatureFunction {
+ public:
+  WordPairsFeatures(const std::string& param);
+ protected:
+  virtual void TraversalFeaturesImpl(const SentenceMetadata& smeta,
+                                     const HG::Edge& edge,
+                                     const std::vector<const void*>& ant_contexts,
+                                     SparseVector<double>* features,
+                                     SparseVector<double>* estimated_features,
+                                     void* context) const;
+  void PrepareForInput(const SentenceMetadata& smeta);
+ private:
+  typedef std::map<WordID, int> Class2FID;
+  typedef std::map<WordID, Class2FID> Class2Class2FID;
+  typedef std::map<WordID, Class2Class2FID> Class2Class2Class2FID;
+  typedef std::map<WordID, Class2Class2Class2FID> Class2Class2Class2Class2FID;
+
+  void FireFeature(WordID src,
+                   WordID trg,
+		   double val,
+                   SparseVector<double>* features) const;
+  void FireFeatureContext(WordID src,
+			  WordID src_context,
+			  WordID trg,
+			  const int context,
+			  SparseVector<double>* features) const;
+
+  void FireFeatureDelete(WordID src,
+                         WordID trg,
+                         SparseVector<double>* features) const;
+  void FireFeatureInsert(WordID src,
+                         WordID trg,
+                         SparseVector<double>* features) const;
+  void FireFeatureBigram(WordID left,
+                         WordID right,
+                         SparseVector<double>* features) const;
+  int StateSize(const void* state, int size) const;
+  std::string fid_str_;
+  std::string fid_strb_;
+  std::string fid_stri_;
+  std::string fid_strd_;
+  std::string fid_strc_;
+  mutable Class2Class2FID fmap_;
+  mutable Class2Class2FID fmapb_;
+  mutable Class2Class2FID fmapi_;
+  mutable Class2Class2FID fmapd_;
+
+  mutable Class2Class2Class2Class2FID fmapc_;
+  //  boost::scoped_ptr<FactoredLexiconHelper> lexmap_; // different view (stemmed, etc) of source
+
+  std::vector<WordID> fkeys_;  // parallel to values_
+  std::map<WordID, double > trg_values_;  // fkeys_index -> e -> value
+  std::map<WordID, double > src_values_;
+  // std::map<WordID, std::map<WordID, SparseVector<float> > > values_;
+  std::vector<std::map<WordID, double > > values_;
+  boost::scoped_ptr<FactoredLexiconHelper> lexmap_;
+};
+
 class Fertility : public FeatureFunction {
  public:
   Fertility(const std::string& param);
