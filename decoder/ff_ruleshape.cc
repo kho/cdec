@@ -40,6 +40,16 @@ RuleShapeFeatures::RuleShapeFeatures(const string& /* param */) {
   }
 }
 
+void RuleShapeFeatures::FireFeatureRule(string rule_fstring,
+					SparseVector<double>* features) const {
+  int fid;
+  ostringstream os;
+  os << rule_fstring;
+  fid = FD::Convert(os.str());
+  //cerr << "Feature " << fid << os.str() << endl;
+  features->set_value(fid,1.0);
+}
+
 void RuleShapeFeatures::TraversalFeaturesImpl(const SentenceMetadata& /* smeta */,
                                               const Hypergraph::Edge& edge,
                                               const vector<const void*>& /* ant_contexts */,
@@ -48,6 +58,7 @@ void RuleShapeFeatures::TraversalFeaturesImpl(const SentenceMetadata& /* smeta *
                                               void* /* context */) const {
   const Node* cur = &fidtree_;
   TRule& rule = *edge.rule_;
+  FireFeatureRule(rule.AsStringFeat(), features);
   int pos = 0;  // feature position
   int i = 0;
   while(i < rule.f_.size()) {
