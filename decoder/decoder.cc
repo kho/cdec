@@ -14,7 +14,7 @@
 #include "fdict.h"
 #include "timing_stats.h"
 #include "verbose.h"
-#include "b64tools.h"
+#include "b64featvector.h"
 
 #include "translator.h"
 #include "phrasebased_translator.h"
@@ -776,25 +776,20 @@ void DecoderImpl::AddSupplementalGrammarFromString(const std::string& grammar_st
 }
 
 static inline void ApplyWeightDelta(const string &delta_b64, vector<weight_t> *weights) {
-  if (delta_b64.empty()) return;
-  // Decode data
-  size_t b64_len = delta_b64.size(), len = b64_len / 4 * 3;
-  boost::scoped_array<char> buf(new char[len]);
-  assert(B64::b64decode(reinterpret_cast<const unsigned char *>(delta_b64.data()), b64_len, buf.get(), len));
+  SparseVector<weight_t> delta;
+  DecodeFeatureVector(delta_b64, &delta);
+  if (delta.empty()) return;
   // Apply updates
-  size_t cur = 0;
-  while (cur < len) {
-    string feat_name(buf.get() + cur);
-    if (feat_name.empty()) break;        // Encountered trailing \0
-    int feat_id = FD::Convert(feat_name);
-    weight_t feat_delta = *reinterpret_cast<weight_t *>(buf.get() + cur + feat_name.size() + 1);
-    if (weights->size() <= feat_id) weights->resize(feat_id + 1);
-    cerr.precision(17);
+  for (SparseVector<weight_t>::iterator dit = delta.begin();
+       dit != delta.end(); ++dit) {
+    int feat_id = dit->first;
+    union { weight_t weight; unsigned long long repr; } feat_delta;
+    feat_delta.weight = dit->second;
     if (!SILENT)
-      cerr << "[decoder weight update] " << feat_name << " " << feat_delta
-           << " = " << hex << *reinterpret_cast<unsigned long long *>(&feat_delta) << endl;
-    (*weights)[feat_id] += feat_delta;
-    cur += feat_name.size() + 1 + sizeof(weight_t);
+      cerr << "[decoder weight update] " << FD::Convert(feat_id) << " " << feat_delta.weight
+           << " = " << hex << feat_delta.repr << endl;
+    if (weights->size() <= feat_id) weights->resize(feat_id + 1);
+    (*weights)[feat_id] += feat_delta.weight;
   }
 }
 

@@ -14,6 +14,7 @@
 #include "ff_factory.h"
 #include "ffset.h"
 #include "ff_bleu.h"
+#include "b64featvector.h"
 #include "sparse_vector.h"
 #include "viterbi.h"
 #include "sentence_metadata.h"
@@ -271,8 +272,10 @@ struct OracleBleu {
       kbest_out << sent_id << " ||| ";
       if (mira_compat)
         kbest_out << src_len << " ||| ";
-      kbest_out << TD::GetString(d->yield) << " ||| "
-                << d->feature_values << " ||| " << log(d->score);
+      kbest_out << TD::GetString(d->yield) << " ||| ";
+      if (mira_compat) kbest_out << EncodeFeatureVector(d->feature_values);
+      else kbest_out << d->feature_values;
+      kbest_out << " ||| " << log(d->score);
       if (!refs.empty()) {
         ScoreP sentscore = GetScore(d->yield,sent_id);
         sentscore->PlusEquals(*doc_score,float(1));
