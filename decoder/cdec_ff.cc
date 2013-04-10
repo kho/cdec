@@ -76,6 +76,7 @@ void register_feature_functions() {
   ff_registry.Register("WordSet", new FFFactory<WordSet>);
   ff_registry.Register("Dwarf", new FFFactory<Dwarf>);
   ff_registry.Register("External", new FFFactory<ExternalFeature>);
+  ff_registry.Register("RuleHashFeatures", new FFFactory<RuleHashFeatures>);
 #ifdef HAVE_GLC
   ff_registry.Register("ContextCRF", new FFFactory<Model1Features>);
 #endif
