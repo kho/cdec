@@ -12,7 +12,7 @@
 #include "verbose.h"
 #include "tdict.h"
 #include "hg.h"
-#include "hash.h"
+#include "MurmurHash3.h"
 
 using namespace std;
 
@@ -79,11 +79,12 @@ void RuleHashFeatures::TraversalFeaturesImpl(const SentenceMetadata& smeta,
                                              SparseVector<double>* features,
                                              SparseVector<double>* estimated_features,
                                              void* context) const {
-  const TRule &rule = *(edge.rule_);
-  typedef murmur_hash<string> Hash;
-  Hash::result_type h = Hash()(rule.AsString(false));
+  string rule = edge.rule_->AsString(false);
+  uint32_t h = 0;
+  MurmurHash3_x86_32(static_cast<const void *>(rule.data()),
+                     static_cast<int>(rule.size()), 0, &h);
   string feat_name=("H:");
-  feat_name.reserve(8);
+  feat_name.reserve(10);
   while (h) {
     feat_name.push_back(kHEXMAP[h & 0xf]);
     h = h >> 4;

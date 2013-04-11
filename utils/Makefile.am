@@ -78,7 +78,8 @@ libutils_a_SOURCES = \
   sparse_vector.cc \
   timing_stats.cc \
   verbose.cc \
-  weights.cc
+  weights.cc \
+  MurmurHash3.cpp
 
 if HAVE_CMPH
   libutils_a_SOURCES += perfect_hash.cc
