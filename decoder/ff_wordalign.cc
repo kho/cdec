@@ -22,6 +22,7 @@
 #include "aligner.h"
 #include "tdict.h"   // Blunsom hack
 #include "filelib.h" // Blunsom hack
+#include "ff_hash.h" // for hashing WordPairsFeatures
 
 static const int MAX_SENTENCE_SIZE = 100;
 
@@ -608,7 +609,8 @@ void WordPairsFeatures::PrepareForInput(const SentenceMetadata& smeta) {
 }
 
 WordPairsFeatures::WordPairsFeatures(const string& param) :
-    FeatureFunction(sizeof(WordID) + sizeof(int)) {
+    FeatureFunction(sizeof(WordID) + sizeof(int)),
+    hash_(false) {
   vector<string> argv;
   fid_str_ = "WPF:";
 
@@ -620,6 +622,17 @@ WordPairsFeatures::WordPairsFeatures(const string& param) :
   fid_strd_ = "DEL:";
   // int argc = SplitOnWhitespace(param, &argv);
   SplitOnWhitespace(param, &argv);
+
+  vector<string>::iterator it = argv.begin();
+  for (; it != argv.end(); ++it) {
+    if (*it == "-h") {
+      hash_ = true;
+      cerr << "Hashing WordPairsFeatures" << endl;
+      break;
+    }
+  }
+  if (it != argv.end())
+    argv.erase(it);
   //  if (argc != 1) {
   // cerr << "WordPairFeatures /path/to/feature_values.table\n";
   //  abort();
@@ -830,7 +843,7 @@ WordPairsFeatures::WordPairsFeatures(const string& param) :
 
     }
   }
-  map<WordID,double>::iterator it;
+  // map<WordID,double>::iterator it;
   //cerr << "Here " << endl;
 
   /*     for (int i =0;i<values_.size(); i++)
@@ -857,7 +870,14 @@ void WordPairsFeatures::FireFeatureBigram(WordID left,
     os << fid_strb_ << ":";
     os << ":" << TD::Convert(left);
     os << ":" << TD::Convert(right);
-    fid = FD::Convert(os.str());
+    if (hash_) {
+      string feat_name = "WB";
+      feat_name.reserve(18);
+      StringHash<2>(os.str(), &feat_name);
+      fid = FD::Convert(feat_name);
+    } else {
+      fid = FD::Convert(os.str());
+    }
     //    if (fid == 0) fid = -1;
     //cerr << "Feature " << fid << " " << os.str() << endl;
   }
@@ -877,7 +897,14 @@ void WordPairsFeatures::FireFeatureContext(const WordID src,
     ostringstream os;
     os << fid_strc_ << ":" << context << ':';
     os <<  TD::Convert(src) << ":" << TD::Convert(trg) << ":" << TD::Convert(src_context);
-    fid = FD::Convert(os.str());
+    if (hash_) {
+      string feat_name = "WC";
+      feat_name.reserve(18);
+      StringHash<2>(os.str(), &feat_name);
+      fid = FD::Convert(feat_name);
+    } else {
+      fid = FD::Convert(os.str());
+    }
 
   }
   //  cerr << "Feature " << fid << " " << FD::Convert(fid) << endl;
@@ -898,7 +925,14 @@ void WordPairsFeatures::FireFeature(const WordID src,
     ostringstream os;
     os << fid_str_ << ':';
     os <<  TD::Convert(src) << ":" << TD::Convert(trg);
-    fid = FD::Convert(os.str());
+    if (hash_) {
+      string feat_name = "WF";
+      feat_name.reserve(18);
+      StringHash<2>(os.str(), &feat_name);
+      fid = FD::Convert(feat_name);
+    } else {
+      fid = FD::Convert(os.str());
+    }
     //    cerr << "Feature " << fid << " " << os.str() << " " << val << endl;
   }
 
@@ -917,7 +951,14 @@ void WordPairsFeatures::FireFeatureInsert(const WordID src,
     os << fid_stri_ << ':';
     //      os <<  TD::Convert(src) << ":" << TD::Convert(trg);
     os << TD::Convert(trg);
-    fid = FD::Convert(os.str());
+    if (hash_) {
+      string feat_name = "WI";
+      feat_name.reserve(18);
+      StringHash<2>(os.str(), &feat_name);
+      fid = FD::Convert(feat_name);
+    } else {
+      fid = FD::Convert(os.str());
+    }
     //cerr << "Feature " << fid << " " << os.str() << endl;
   }
 
@@ -935,7 +976,14 @@ void WordPairsFeatures::FireFeatureDelete(const WordID src,
     os << fid_strd_ << ':';
     //      os <<  TD::Convert(src) << ":" << TD::Convert(trg);
     os << TD::Convert(src);
-    fid = FD::Convert(os.str());
+    if (hash_) {
+      string feat_name = "WD";
+      feat_name.reserve(18);
+      StringHash<2>(os.str(), &feat_name);
+      fid = FD::Convert(feat_name);
+    } else {
+      fid = FD::Convert(os.str());
+    }
     //cerr << "Feature " << fid << " " << os.str() << endl;
   }
 

@@ -309,6 +309,8 @@ class WordPairsFeatures : public FeatureFunction {
   // std::map<WordID, std::map<WordID, SparseVector<float> > > values_;
   std::vector<std::map<WordID, double > > values_;
   boost::scoped_ptr<FactoredLexiconHelper> lexmap_;
+  // hash feature names
+  bool hash_;
 };
 
 class Fertility : public FeatureFunction {
