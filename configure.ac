@@ -4,9 +4,9 @@ AM_INIT_AUTOMAKE
 AC_CONFIG_HEADERS(config.h)
 AC_PROG_LIBTOOL
 AC_PROG_LEX
-case $LEX in 
-:) AC_MSG_ERROR([No lex (Flex, lex, etc.) program found]);; 
-esac 
+case $LEX in
+:) AC_MSG_ERROR([No lex (Flex, lex, etc.) program found]);;
+esac
 # CPPFLAGS="$CPPFLAGS -std=c++0x"
 AC_PROG_CC
 AC_PROG_CXX
@@ -193,8 +193,6 @@ AC_CONFIG_FILES([utils/Makefile])
 AC_CONFIG_FILES([mteval/Makefile])
 AC_CONFIG_FILES([mteval/meteor_jar.cc])
 AC_CONFIG_FILES([decoder/Makefile])
-AC_CONFIG_FILES([python/setup.py])
-AC_CONFIG_FILES([extractor/Makefile])
 AC_CONFIG_FILES([word-aligner/Makefile])
 
 # KenLM stuff
@@ -208,18 +206,6 @@ AC_CONFIG_FILES([klm/lm/builder/Makefile])
 # training stuff
 AC_CONFIG_FILES([training/Makefile])
 AC_CONFIG_FILES([training/utils/Makefile])
-AC_CONFIG_FILES([training/liblbfgs/Makefile])
-AC_CONFIG_FILES([training/crf/Makefile])
-AC_CONFIG_FILES([training/dpmert/Makefile])
-AC_CONFIG_FILES([training/pro/Makefile])
-AC_CONFIG_FILES([training/rampion/Makefile])
-AC_CONFIG_FILES([training/minrisk/Makefile])
-AC_CONFIG_FILES([training/mira/Makefile])
-AC_CONFIG_FILES([training/latent_svm/Makefile])
-AC_CONFIG_FILES([training/dtrain/Makefile])
-
-# external feature function example code
-AC_CONFIG_FILES([example_extff/Makefile])
 
 AC_OUTPUT
 
