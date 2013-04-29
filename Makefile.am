@@ -11,11 +11,7 @@ SUBDIRS = \
   klm/lm/builder \
   klm/search \
   decoder \
-  training \
-  training/liblbfgs \
-  word-aligner \
-  example_extff \
-  extractor
+  word-aligner
 
 #gi/pyp-topics/src gi/clda/src gi/posterior-regularisation/prjava
 

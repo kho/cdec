@@ -12,7 +12,6 @@
 #include "verbose.h"
 #include "tdict.h"
 #include "hg.h"
-#include "MurmurHash3.h"
 
 using namespace std;
 
@@ -67,29 +66,6 @@ void RuleIdentityFeatures::TraversalFeaturesImpl(const SentenceMetadata& smeta,
     it = rule2_fid_.insert(make_pair(&rule, FD::Convert(Escape(os.str())))).first;
   }
   features->add_value(it->second, 1);
-}
-
-RuleHashFeatures::RuleHashFeatures(const std::string &) {}
-
-char kHEXMAP[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
-
-void RuleHashFeatures::TraversalFeaturesImpl(const SentenceMetadata& smeta,
-                                             const HG::Edge& edge,
-                                             const std::vector<const void*>& ant_contexts,
-                                             SparseVector<double>* features,
-                                             SparseVector<double>* estimated_features,
-                                             void* context) const {
-  string rule = edge.rule_->AsString(false);
-  uint32_t h = 0;
-  MurmurHash3_x86_32(static_cast<const void *>(rule.data()),
-                     static_cast<int>(rule.size()), 0, &h);
-  string feat_name=("H:");
-  feat_name.reserve(10);
-  while (h) {
-    feat_name.push_back(kHEXMAP[h & 0xf]);
-    h = h >> 4;
-  }
-  features->add_value(FD::Convert(feat_name), 1);
 }
 
 RuleSourceBigramFeatures::RuleSourceBigramFeatures(const std::string& param) {

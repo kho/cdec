@@ -21,6 +21,7 @@
 #include "ff_wordset.h"
 #include "ff_dwarf.h"
 #include "ff_external.h"
+#include "ff_hash.h"
 
 #ifdef HAVE_GLC
 #include <cdec/ff_glc.h>
