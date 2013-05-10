@@ -605,7 +605,7 @@ void InputIndicator::TraversalFeaturesImpl(const SentenceMetadata& smeta,
   }
 }
 void WordPairsFeatures::PrepareForInput(const SentenceMetadata& smeta) {
-  lexmap_->PrepareForInput(smeta);
+  // lexmap_->PrepareForInput(smeta);
 }
 
 WordPairsFeatures::WordPairsFeatures(const string& param) :
@@ -614,7 +614,7 @@ WordPairsFeatures::WordPairsFeatures(const string& param) :
   vector<string> argv;
   fid_str_ = "WPF:";
 
-  lexmap_.reset(new FactoredLexiconHelper);
+  // lexmap_.reset(new FactoredLexiconHelper);
   //on target side
   fid_strb_ = "TB:";
   fid_strc_ = "WPC:";
@@ -1006,32 +1006,32 @@ void WordPairsFeatures::TraversalFeaturesImpl(const SentenceMetadata& smeta,
   //cerr <<" || " << r.AsString() <<" || " << endl;
   const int arity = edge.Arity();
 
-  WordID& out_context = *static_cast<WordID*>(context);
-  int& out_word_count = *(static_cast<int*>(context) + 1);
-  if (arity == 0) {
-    //cerr<<"Ar 0" << endl;
-    out_context = lexmap_->SourceWordAtPosition(edge.i_);
-    out_word_count = edge.rule_->EWords();
+  // WordID& out_context = *static_cast<WordID*>(context);
+  // int& out_word_count = *(static_cast<int*>(context) + 1);
+  // if (arity == 0) {
+  //   //cerr<<"Ar 0" << endl;
+  //   // out_context = lexmap_->SourceWordAtPosition(edge.i_);
+  //   // out_word_count = edge.rule_->EWords();
 
-  } else if (arity == 1) {
-    //cerr <<"ar 1 " << endl;
-    WordID left = *static_cast<const WordID*>(ant_contexts[0]);
-    int left_wc = *(static_cast<const int*>(ant_contexts[0]) + 1);
-    out_context = left;
-    out_word_count = left_wc;
-    //cerr << "L" << TD::Convert(left) << " " << left_wc << endl;
+  // } else if (arity == 1) {
+  //   //cerr <<"ar 1 " << endl;
+  //   WordID left = *static_cast<const WordID*>(ant_contexts[0]);
+  //   int left_wc = *(static_cast<const int*>(ant_contexts[0]) + 1);
+  //   out_context = left;
+  //   out_word_count = left_wc;
+  //   //cerr << "L" << TD::Convert(left) << " " << left_wc << endl;
 
-  } else if (arity == 2) {
-    //cerr <<"ar 2" << endl;
-    // WordID left = *static_cast<const WordID*>(ant_contexts[0]);
-    WordID right = *static_cast<const WordID*>(ant_contexts[1]);
-    int left_wc = *(static_cast<const int*>(ant_contexts[0]) + 1);
-    int right_wc = *(static_cast<const int*>(ant_contexts[0]) + 1);
-    //cerr << "L" << TD::Convert(left) << " R " << TD::Convert(right) << " " <<  left_wc << " " << right_wc << endl;
-    out_word_count = left_wc + right_wc;
-    out_context = right;
+  // } else if (arity == 2) {
+  //   //cerr <<"ar 2" << endl;
+  //   // WordID left = *static_cast<const WordID*>(ant_contexts[0]);
+  //   WordID right = *static_cast<const WordID*>(ant_contexts[1]);
+  //   int left_wc = *(static_cast<const int*>(ant_contexts[0]) + 1);
+  //   int right_wc = *(static_cast<const int*>(ant_contexts[0]) + 1);
+  //   //cerr << "L" << TD::Convert(left) << " R " << TD::Convert(right) << " " <<  left_wc << " " << right_wc << endl;
+  //   out_word_count = left_wc + right_wc;
+  //   out_context = right;
 
-  }
+  // }
 
   const vector<WordID>& e = edge.rule_->e();
   const vector<WordID>& f = edge.rule_->f();
@@ -1064,80 +1064,80 @@ void WordPairsFeatures::TraversalFeaturesImpl(const SentenceMetadata& smeta,
         trg = TD::Convert("<unk>");
     }
 
-    //check if source has context
-    //left context
-    if (i->s_> 0){
-      int indl = i->s_ -1;
-      WordID src_context;
-      if(f[indl] < 1){
-        //nonterminal
-        if (arity == 1) {
-          src_context = *static_cast<const WordID*>(ant_contexts[0]);
-          //  cerr<<"asleft=" << TD::Convert(src_context) << endl;
-        }
-        else if (arity == 2) {
-          if(indl == nont_pos.at(1)) {
-            src_context = *static_cast<const WordID*>(ant_contexts[1]);
-            //	cerr<<"a21sleft=" << TD::Convert(src_context) << endl;
-          }
-          else {
-            src_context = *static_cast<const WordID*>(ant_contexts[0]);
-            //	cerr<<"a20sleft=" << TD::Convert(src_context) << endl;
-          }
-        }
-      }
-      else {
-        //terminal
-        src_context = f[indl];
-        // cerr<<"sleft=" << TD::Convert(src_context) << endl;
-      }
+    // //check if source has context
+    // //left context
+    // if (i->s_> 0){
+    //   int indl = i->s_ -1;
+    //   WordID src_context;
+    //   if(f[indl] < 1){
+    //     //nonterminal
+    //     if (arity == 1) {
+    //       src_context = *static_cast<const WordID*>(ant_contexts[0]);
+    //       //  cerr<<"asleft=" << TD::Convert(src_context) << endl;
+    //     }
+    //     else if (arity == 2) {
+    //       if(indl == nont_pos.at(1)) {
+    //         src_context = *static_cast<const WordID*>(ant_contexts[1]);
+    //         //	cerr<<"a21sleft=" << TD::Convert(src_context) << endl;
+    //       }
+    //       else {
+    //         src_context = *static_cast<const WordID*>(ant_contexts[0]);
+    //         //	cerr<<"a20sleft=" << TD::Convert(src_context) << endl;
+    //       }
+    //     }
+    //   }
+    //   else {
+    //     //terminal
+    //     src_context = f[indl];
+    //     // cerr<<"sleft=" << TD::Convert(src_context) << endl;
+    //   }
 
-      size_t inds = distance(fkeys_.begin(), lower_bound(fkeys_.begin(), fkeys_.end(), src_context));
-      if (inds == fkeys_.size() || fkeys_[inds] != src_context) {
-        src_context = TD::Convert("<unk>");
-      }
-
-
-      FireFeatureContext(src,src_context,trg,0,features);
-
-    }
+    //   size_t inds = distance(fkeys_.begin(), lower_bound(fkeys_.begin(), fkeys_.end(), src_context));
+    //   if (inds == fkeys_.size() || fkeys_[inds] != src_context) {
+    //     src_context = TD::Convert("<unk>");
+    //   }
 
 
-    //right context
-    if (i->s_+ 1 < f.size()){
-      int indl = i->s_ + 1;
-      WordID src_context;
-      if(f[indl] < 1){
-        //nonterminal
-        if (arity == 1) {
-          src_context = *static_cast<const WordID*>(ant_contexts[0]);
-          // cerr<<"asright=" << TD::Convert(src_context) << endl;
-        }
-        else if (arity == 2) {
-          if(indl == nont_pos.at(1)) {
-            src_context = *static_cast<const WordID*>(ant_contexts[1]);
-            //	cerr<<"a21sright=" << TD::Convert(src_context) << endl;
-          }
-          else {
-            src_context = *static_cast<const WordID*>(ant_contexts[0]);
-            //	cerr<<"a20sright=" << TD::Convert(src_context) << endl;
-          }
-        }
-      }
-      else {
-        //terminal
-        // WordID src_context = f[indl];
-        // cerr<<"sright=" << TD::Convert(src_context) << endl;
-      }
+    //   FireFeatureContext(src,src_context,trg,0,features);
+
+    // }
 
 
-      size_t inds = distance(fkeys_.begin(), lower_bound(fkeys_.begin(), fkeys_.end(), src_context));
-      if (inds == fkeys_.size() || fkeys_[inds] != src_context) {
-        src_context = TD::Convert("<unk>");
-      }
+    // //right context
+    // if (i->s_+ 1 < f.size()){
+    //   int indl = i->s_ + 1;
+    //   WordID src_context;
+    //   if(f[indl] < 1){
+    //     //nonterminal
+    //     if (arity == 1) {
+    //       src_context = *static_cast<const WordID*>(ant_contexts[0]);
+    //       // cerr<<"asright=" << TD::Convert(src_context) << endl;
+    //     }
+    //     else if (arity == 2) {
+    //       if(indl == nont_pos.at(1)) {
+    //         src_context = *static_cast<const WordID*>(ant_contexts[1]);
+    //         //	cerr<<"a21sright=" << TD::Convert(src_context) << endl;
+    //       }
+    //       else {
+    //         src_context = *static_cast<const WordID*>(ant_contexts[0]);
+    //         //	cerr<<"a20sright=" << TD::Convert(src_context) << endl;
+    //       }
+    //     }
+    //   }
+    //   else {
+    //     //terminal
+    //     // WordID src_context = f[indl];
+    //     // cerr<<"sright=" << TD::Convert(src_context) << endl;
+    //   }
 
-      FireFeatureContext(src,src_context,trg,1,features);
-    }
+
+    //   size_t inds = distance(fkeys_.begin(), lower_bound(fkeys_.begin(), fkeys_.end(), src_context));
+    //   if (inds == fkeys_.size() || fkeys_[inds] != src_context) {
+    //     src_context = TD::Convert("<unk>");
+    //   }
+
+    //   FireFeatureContext(src,src_context,trg,1,features);
+    // }
 
 
     //check if word pair is in top k word pairs

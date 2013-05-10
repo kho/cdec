@@ -16,8 +16,6 @@ class RuleShapeFeatures : public FeatureFunction {
                                      SparseVector<double>* estimated_features,
                                      void* context) const;
  private:
-  void FireFeatureRule(std::string rule_fstring,
-                       SparseVector<double>* features) const;
   struct Node {
     int fid_;
     Node() : fid_(-1) {}
