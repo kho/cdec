@@ -53,6 +53,7 @@ libcdec_a_SOURCES = \
   ff_dwarf.h \
   ff_external.h \
   ff_factory.h \
+  ff_hash.h \
   ff_klm.h \
   ff_lm.h \
   ff_ngrams.h \
@@ -133,6 +134,7 @@ libcdec_a_SOURCES = \
   ff_wordset.cc \
   ff_context.cc \
   ff_charset.cc \
+  ff_hash.cc \
   ff_lm.cc \
   ff_klm.cc \
   ff_ngrams.cc \

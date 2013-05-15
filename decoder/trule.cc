@@ -233,6 +233,25 @@ void TRule::ComputeArity() {
     if (*i < min) min = *i;
   arity_ = 1 - min;
 }
+static string AnonymousStrVar(int i) {
+  string res("[v]");
+  if(!(i <= 0 && i >= -8)) {
+    cerr << "Can't handle more than 9 non-terminals: index=" << (-i) << endl;
+    abort();
+  }
+  res[1] = '1' - i;
+  return res;
+}
+
+static string AnonymousStrVarFeat(int i) {
+  string res("Ev");
+  if(!(i <= 0 && i >= -8)) {
+    cerr << "Can't handle more than 9 non-terminals: index=" << (-i) << endl;
+    abort();
+  }
+  res[1] = '1' - i;
+  return res;
+}
 
 string TRule::AsString(bool verbose) const {
   ostringstream os;
@@ -267,5 +286,44 @@ string TRule::AsString(bool verbose) const {
         os << ' ' << a_[i];
     }
   }
+  return os.str();
+}
+string TRule::AsStringFeat(bool verbose) const {
+  ostringstream os;
+  int idx = 0;
+  if (lhs_ && verbose) {
+    os << "RF::"<< TD::Convert(lhs_ * -1);
+  }
+  for (int i = 0; i < f_.size(); ++i) {
+    const WordID& w = f_[i];
+    if (w < 0) {
+      int wi = w * -1;
+      ++idx;
+      os << "_" << TD::Convert(wi) << idx;
+    } else {
+      os << '_' << TD::Convert(w);
+    }
+  }
+  os << "_";
+  if (idx > 9) {
+    cerr << "Too many non-terminals!\n partial: " << os.str() << endl;
+    exit(1);
+  }
+  for (int i =0; i<e_.size(); ++i) {
+    if (i) os << '_';
+    const WordID& w = e_[i];
+    if (w < 1)
+      os << AnonymousStrVarFeat(w);
+    else
+      os << TD::Convert(w);
+  }
+//  if (!scores_.empty() && verbose) {
+ //   os << " ||| " << scores_;
+  //  if (!a_.empty()) {
+   //   os << " |||";
+    //  for (int i = 0; i < a_.size(); ++i)
+     //   os << ' ' << a_[i];
+   // }
+ // }
   return os.str();
 }

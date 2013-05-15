@@ -5,6 +5,7 @@
 #include <boost/program_options/variables_map.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/scoped_ptr.hpp>
+#include <boost/scoped_array.hpp>
 
 #include "program_options.h"
 #include "stringlib.h"
@@ -13,6 +14,7 @@
 #include "fdict.h"
 #include "timing_stats.h"
 #include "verbose.h"
+#include "b64featvector.h"
 
 #include "translator.h"
 #include "phrasebased_translator.h"
@@ -187,15 +189,18 @@ struct DecoderImpl {
   }
   void SetId(int next_sent_id) { sent_id = next_sent_id - 1; }
 
-    //@author ferhanture
-    std::string GetTrans(int seg_id){
-        Int2StrMap::iterator iterator = translations.find(seg_id);
-        if(iterator != translations.end()){
-            return iterator->second;
-        }else {
-            return "NUL";
-        }
+  //@author ferhanture
+  std::string GetTrans(int seg_id){
+    Int2StrMap::iterator iterator = translations.find(seg_id);
+    if(iterator != translations.end()){
+      return iterator->second;
+    }else {
+      return "NUL";
     }
+  }
+
+  void AddSupplementalGrammar(boost::shared_ptr<Grammar> gp);
+  void AddSupplementalGrammarFromString(const std::string& grammar_string);
 
   void forest_stats(Hypergraph &forest,string name,bool show_tree,bool show_deriv=false, bool extract_rules=false, boost::shared_ptr<WriteFile> extract_file = boost::make_shared<WriteFile>()) {
     cerr << viterbi_stats(forest,name,true,show_tree,show_deriv,extract_rules, extract_file);
@@ -339,6 +344,8 @@ struct DecoderImpl {
   bool output_training_vector; // TODO Observer
   bool remove_intersected_rule_annotations;
   boost::scoped_ptr<IncrementalBase> incremental;
+  bool mira_compat;
+  bool mr_compat;
 
   //@author ferhanture
   typedef unordered_map<int, string> Int2StrMap;
@@ -456,13 +463,16 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
         ("vector_format",po::value<string>()->default_value("b64"), "Sparse vector serialization format for feature expectations or gradients, includes (text or b64)")
         ("combine_size,C",po::value<int>()->default_value(1), "When option -G is used, process this many sentence pairs before writing the gradient (1=emit after every sentence pair)")
         ("forest_output,O",po::value<string>(),"Directory to write forests to")
-      ("xml", "Output k-best in XML")
-      ("xml_strip_soseos", "Strip <s> and </s> in XML output (must be combined with --xml; input must contain <s> and </s>)")
-    ("remove_intersected_rule_annotations", "After forced decoding is completed, remove nonterminal annotations (i.e., the source side spans)")
+        ("xml", "Output k-best in XML")
+        ("xml_strip_soseos", "Strip <s> and </s> in XML output (must be combined with --xml; input must contain <s> and </s>)")
+        ("remove_intersected_rule_annotations", "After forced decoding is completed, remove nonterminal annotations (i.e., the source side spans)")
 	//@author ferhanture
-    ("rules_dir",po::value<string>(),"DISCOURSE FEATURE: Directory to read rule frequency of each document from")
-    ("rules_file",po::value<string>(),"DISCOURSE FEATURE: File to read rule frequency of entire collection from")
-    ("df",po::value<vector<string> >()->composing(),"DISCOURSE FEATURE: File to read document frequency (df) values, followed by total number of documents");
+        ("rules_dir",po::value<string>(),"DISCOURSE FEATURE: Directory to read rule frequency of each document from")
+        ("rules_file",po::value<string>(),"DISCOURSE FEATURE: File to read rule frequency of entire collection from")
+        ("df",po::value<vector<string> >()->composing(),"DISCOURSE FEATURE: File to read document frequency (df) values, followed by total number of documents")
+        ("mira_compat", "MIRA compatibility mode (applies weight delta if available; outputs number of lines before k-best).")
+        ("mr_compat", "MapReduce compatibility mode (reads per-sentence grammar from input)")
+      ;
 
   // ob.AddOptions(&opts);
 #ifdef FSA_RESCORING
@@ -748,6 +758,8 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
   get_oracle_forest = conf.count("get_oracle_forest");
   oracle.show_derivation=conf.count("show_derivations");
   remove_intersected_rule_annotations = conf.count("remove_intersected_rule_annotations");
+  mira_compat = conf.count("mira_compat");
+  mr_compat = conf.count("mr_compat");
 
 #ifdef FSA_RESCORING
   cfg_options.Validate();
@@ -778,11 +790,36 @@ bool Decoder::Decode(const string& input, DecoderObserver* o) {
 vector<weight_t>& Decoder::CurrentWeightVector() { return pimpl_->CurrentWeightVector(); }
 const vector<weight_t>& Decoder::CurrentWeightVector() const { return pimpl_->CurrentWeightVector(); }
 void Decoder::AddSupplementalGrammar(GrammarPtr gp) {
-  static_cast<SCFGTranslator&>(*pimpl_->translator).AddSupplementalGrammar(gp);
+  pimpl_->AddSupplementalGrammar(gp);
 }
 void Decoder::AddSupplementalGrammarFromString(const std::string& grammar_string) {
-  assert(pimpl_->translator->GetDecoderType() == "SCFG");
-  static_cast<SCFGTranslator&>(*pimpl_->translator).AddSupplementalGrammarFromString(grammar_string);
+  pimpl_->AddSupplementalGrammarFromString(grammar_string);
+}
+
+void DecoderImpl::AddSupplementalGrammar(GrammarPtr gp) {
+  static_cast<SCFGTranslator&>(*translator).AddSupplementalGrammar(gp);
+}
+void DecoderImpl::AddSupplementalGrammarFromString(const std::string& grammar_string) {
+  assert(translator->GetDecoderType() == "SCFG");
+  static_cast<SCFGTranslator&>(*translator).AddSupplementalGrammarFromString(grammar_string);
+}
+
+static inline void ApplyWeightDelta(const string &delta_b64, vector<weight_t> *weights) {
+  SparseVector<weight_t> delta;
+  DecodeFeatureVector(delta_b64, &delta);
+  if (delta.empty()) return;
+  // Apply updates
+  for (SparseVector<weight_t>::iterator dit = delta.begin();
+       dit != delta.end(); ++dit) {
+    int feat_id = dit->first;
+    union { weight_t weight; unsigned long long repr; } feat_delta;
+    feat_delta.weight = dit->second;
+    if (!SILENT)
+      cerr << "[decoder weight update] " << FD::Convert(feat_id) << " " << feat_delta.weight
+           << " = " << hex << feat_delta.repr << endl;
+    if (weights->size() <= feat_id) weights->resize(feat_id + 1);
+    (*weights)[feat_id] += feat_delta.weight;
+  }
 }
 
 //@author ferhanture
@@ -802,6 +839,19 @@ void Decoder::NewDocument(){
 
 bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
   string buf = input;
+  if (mr_compat) {
+    // Strip off per-sentence grammar if given
+    // Message format: input\tgrammar
+    size_t first_tab = buf.find('\t');
+    if (first_tab != string::npos) {
+      string grammar = buf.substr(first_tab + 1); grammar.append("\n");
+      buf.erase(first_tab);
+      replace(grammar.begin(), grammar.end(), '\t', '\n');
+      cerr << "[mr input] " << buf << endl;
+      AddSupplementalGrammarFromString(grammar);
+    }
+  }
+
   NgramCache::Clear();   // clear ngram cache for remote LM (if used)
   Timer::Summarize();
   ++sent_id;
@@ -815,6 +865,10 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
     ss << sent_id;
     extract_file.reset(new WriteFile(str("extract_rules",conf)+"/"+ss.str()));
   }
+
+  // Add delta from input to weights before decoding
+  if (mira_compat)
+    ApplyWeightDelta(sgml["delta"], init_weights.get());
 
   if (!SILENT) {
     cerr << "\nINPUT: ";
@@ -1064,9 +1118,13 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
       //TODO: does this work properly?
       const string deriv_fname = conf.count("show_derivations") ? str("show_derivations",conf) : "-";
       if (xml_kbest)
-        oracle.DumpKBestXML(sent_id, to_translate, forest, conf["k_best"].as<int>(), unique_kbest, xml_strip_soseos, "-", deriv_fname);
+        oracle.DumpKBestXML(sent_id, to_translate, forest,
+                            conf["k_best"].as<int>(), unique_kbest,
+                            xml_strip_soseos, "-", deriv_fname);
       else
-        oracle.DumpKBest(sent_id, forest, conf["k_best"].as<int>(), unique_kbest,"-", deriv_fname);
+        oracle.DumpKBest(sent_id, forest, conf["k_best"].as<int>(),
+                         unique_kbest, mira_compat, smeta.GetSourceLength(),
+                         "-", deriv_fname);
     } else if (csplit_output_plf) {
       cout << HypergraphIO::AsPLF(forest, false) << endl;
     } else {
@@ -1197,7 +1255,9 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
       if (conf.count("graphviz")) forest.PrintGraphviz();
       if (kbest) {
         const string deriv_fname = conf.count("show_derivations") ? str("show_derivations",conf) : "-";
-        oracle.DumpKBest(sent_id, forest, conf["k_best"].as<int>(), unique_kbest,"-", deriv_fname);
+        oracle.DumpKBest(sent_id, forest, conf["k_best"].as<int>(),
+                         unique_kbest, mira_compat, smeta.GetSourceLength(),
+                         "-", deriv_fname);
       }
       if (conf.count("show_conditional_prob")) {
         const prob_t ref_z = Inside<prob_t, EdgeProb>(forest);

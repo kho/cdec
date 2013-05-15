@@ -40,6 +40,7 @@ RuleShapeFeatures::RuleShapeFeatures(const string& /* param */) {
   }
 }
 
+
 void RuleShapeFeatures::TraversalFeaturesImpl(const SentenceMetadata& /* smeta */,
                                               const Hypergraph::Edge& edge,
                                               const vector<const void*>& /* ant_contexts */,

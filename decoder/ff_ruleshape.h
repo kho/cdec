@@ -1,6 +1,7 @@
 #ifndef _FF_RULESHAPE_H_
 #define _FF_RULESHAPE_H_
 
+#include <string>
 #include <vector>
 #include "ff.h"
 
