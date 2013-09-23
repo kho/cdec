@@ -38,7 +38,7 @@ my $CCONFIG = {
     'JobControl'  => 'qsub',
     'QSubMemFlag' => '-l pmem=',
     'QSubQueue' => '-q batch',
-    'QSubExtraFlags' => '-V -l walltime=24:00:00',
+    'QSubExtraFlags' => '-V -l walltime=2:00:00',
     'DefaultJobs' => 15,
   },
   'CLSP' => {
