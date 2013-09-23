@@ -1,6 +1,7 @@
 #!/bin/sh
 make distclean
-/usr/local/stow/autoconf-2.65/bin/autoreconf -if && \
-    ./configure --with-boost=/fs/clip-software/user-supported/boost/boost-current && \
+/fs/clip-software/autoconf/bin/autoreconf -if && \
+    ./configure --with-boost=/opt/local/toolchain/gcc48/boost-1.50.0 && \
     make -kj8
-cd sa-extract && make -f Makefile.umiacs
+make -C sa-extract clean
+make -C sa-extract -kj8 -f Makefile.umiacs
