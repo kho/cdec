@@ -29,6 +29,7 @@
 #include "ff_register.h"
 #include "ff_charset.h"
 #include "ff_wordset.h"
+#include "ff_dwarf.h"
 #include "ff_external.h"
 #include "ff_hash.h"
 
@@ -93,6 +94,7 @@ void register_feature_functions() {
   ff_registry.Register("WordPairsFeatures", new FFFactory<WordPairsFeatures>);
   ff_registry.Register("SourcePathFeatures", new FFFactory<SourcePathFeatures>);
   ff_registry.Register("WordSet", new FFFactory<WordSet>);
+  ff_registry.Register("Dwarf", new FFFactory<Dwarf>);
   ff_registry.Register("External", new FFFactory<ExternalFeature>);
   ff_registry.Register("RuleHashFeatures", new FFFactory<RuleHashFeatures>);
 #ifdef HAVE_GLC
