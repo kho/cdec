@@ -1,6 +1,11 @@
 #include "decoder.h"
 
-#include <tr1/unordered_map>
+#ifndef HAVE_OLD_CPP
+# include <unordered_map>
+#else
+# include <tr1/unordered_map>
+namespace std { using std::tr1::unordered_map; }
+#endif
 #include <boost/program_options.hpp>
 #include <boost/program_options/variables_map.hpp>
 #include <boost/make_shared.hpp>
@@ -63,7 +68,6 @@
 static const double kMINUS_EPSILON = -1e-6;  // don't be too strict
 
 using namespace std;
-using namespace std::tr1;
 namespace po = boost::program_options;
 
 static bool verbose_feature_functions=true;
@@ -92,7 +96,7 @@ struct ELengthWeightFunction {
   }
 };
 inline void ShowBanner() {
-  cerr << "cdec v1.0 (c) 2009-2011 by Chris Dyer\n";
+  cerr << "cdec (c) 2009--2013 by Chris Dyer\n";
 }
 
 inline string str(char const* name,po::variables_map const& conf) {

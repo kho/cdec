@@ -6,18 +6,17 @@ libksearch_a_SOURCES = \
   context.hh \
   dedupe.hh \
   edge.hh \
+  edge_generator.cc \
   edge_generator.hh \
   header.hh \
+  nbest.cc \
   nbest.hh \
+  rule.cc \
   rule.hh \
   types.hh \
-  vertex.hh \
-  vertex_generator.hh \
-  edge_generator.cc \
-	nbest.cc \
-  rule.cc \
   vertex.cc \
-  vertex_generator.cc
+  vertex.hh \
+  vertex_generator.hh
 
-AM_CPPFLAGS = -W -Wall -Wno-sign-compare -I$(top_srcdir)/klm
+AM_CPPFLAGS = -W -Wall -Wno-sign-compare -I..
 

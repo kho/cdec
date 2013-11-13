@@ -49,7 +49,6 @@ cdef class Phrase:
         return tuple(norm)
 
     def strhandle(self):
-        strs = []
         norm = []
         cdef int i, j, s
         i = 1
@@ -189,4 +188,4 @@ cdef class Rule:
 
     def alignments(self):
         for point in self.word_alignments:
-            yield point/65536, point%65536
+            yield point / ALIGNMENT_CODE, point % ALIGNMENT_CODE

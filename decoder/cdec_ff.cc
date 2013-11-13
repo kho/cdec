@@ -14,18 +14,24 @@
 #include "ff_rules.h"
 #include "ff_ruleshape.h"
 #include "ff_bleu.h"
+#include "ff_soft_syntax.h"
+#include "ff_soft_syntax2.h"
 #include "ff_source_path.h"
+
+
+#include "ff_parse_match.h"
 #include "ff_source_syntax.h"
+#include "ff_source_syntax_p.h"
+#include "ff_source_syntax2.h"
+#include "ff_source_syntax2_p.h"
+
+
 #include "ff_register.h"
 #include "ff_charset.h"
 #include "ff_wordset.h"
-#include "ff_dwarf.h"
 #include "ff_external.h"
 #include "ff_hash.h"
 
-#ifdef HAVE_GLC
-#include <cdec/ff_glc.h>
-#endif
 
 void register_feature_functions() {
   static bool registered = false;
@@ -42,15 +48,27 @@ void register_feature_functions() {
   RegisterFF<BLEUModel>();
 
   //TODO: use for all features the new Register which requires static FF::usage(false,false) give name
-#ifdef HAVE_RANDLM
-  ff_registry.Register("RandLM", new FFFactory<LanguageModelRandLM>);
-#endif
   ff_registry.Register("SpanFeatures", new FFFactory<SpanFeatures>());
   ff_registry.Register("NgramFeatures", new FFFactory<NgramDetector>());
   ff_registry.Register("RuleContextFeatures", new FFFactory<RuleContextFeatures>());
   ff_registry.Register("RuleIdentityFeatures", new FFFactory<RuleIdentityFeatures>());
+
+
+  ff_registry.Register("ParseMatchFeatures", new FFFactory<ParseMatchFeatures>);
+
+  ff_registry.Register("SoftSyntacticFeatures", new FFFactory<SoftSyntacticFeatures>);
+  ff_registry.Register("SoftSyntacticFeatures2", new FFFactory<SoftSyntacticFeatures2>);
+
   ff_registry.Register("SourceSyntaxFeatures", new FFFactory<SourceSyntaxFeatures>);
+  ff_registry.Register("SourceSyntaxFeatures2", new FFFactory<SourceSyntaxFeatures2>);
+
   ff_registry.Register("SourceSpanSizeFeatures", new FFFactory<SourceSpanSizeFeatures>);
+
+  //ff_registry.Register("PSourceSyntaxFeatures", new FFFactory<PSourceSyntaxFeatures>);
+  //ff_registry.Register("PSourceSpanSizeFeatures", new FFFactory<PSourceSpanSizeFeatures>);
+  //ff_registry.Register("PSourceSyntaxFeatures2", new FFFactory<PSourceSyntaxFeatures2>);
+
+
   ff_registry.Register("CMR2008ReorderingFeatures", new FFFactory<CMR2008ReorderingFeatures>());
   ff_registry.Register("RuleSourceBigramFeatures", new FFFactory<RuleSourceBigramFeatures>());
   ff_registry.Register("RuleTargetBigramFeatures", new FFFactory<RuleTargetBigramFeatures>());
@@ -75,7 +93,6 @@ void register_feature_functions() {
   ff_registry.Register("WordPairsFeatures", new FFFactory<WordPairsFeatures>);
   ff_registry.Register("SourcePathFeatures", new FFFactory<SourcePathFeatures>);
   ff_registry.Register("WordSet", new FFFactory<WordSet>);
-  ff_registry.Register("Dwarf", new FFFactory<Dwarf>);
   ff_registry.Register("External", new FFFactory<ExternalFeature>);
   ff_registry.Register("RuleHashFeatures", new FFFactory<RuleHashFeatures>);
 #ifdef HAVE_GLC

@@ -103,7 +103,7 @@ jam-files/bjam
 jam-files/engine/bin.*
 jam-files/engine/bootstrap/
 klm/lm/bin/
-klm/lm/builder/builder
+klm/lm/builder/lmplz
 klm/lm/build_binary
 klm/lm/ngram_query
 klm/lm/query
@@ -205,8 +205,10 @@ training/dpmert/mr_dpmert_reduce
 training/dpmert/sentclient
 training/dpmert/sentserver
 training/dtrain/dtrain
+training/latent_svm/latent_svm
 training/minrisk/minrisk_optimize
 training/mira/kbest_mira
+training/mira/kbest_cut_mira
 training/pro/mr_pro_map
 training/pro/mr_pro_reduce
 training/rampion/rampion_cccp
