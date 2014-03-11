@@ -119,12 +119,12 @@ def main():
   parser.add_argument('--metric-scale', type=int, default=1, metavar='N',
                       help='scale MT loss by this amount when computing'
                       ' hope/fear candidates')
-  parser.add_argument('-k', '--kbest-size', type=int, default=250, metavar='N', 
+  parser.add_argument('-k', '--kbest-size', type=int, default=500, metavar='N', 
                       help='size of k-best list to extract from forest')
   parser.add_argument('--update-size', type=int, metavar='N', 
                       help='size of k-best list to use for update. defaults to '
                       'equal kbest-size (applies to optimizer 5)')
-  parser.add_argument('--step-size', type=float, default=0.01, 
+  parser.add_argument('--step-size', type=float, default=0.001, 
                       help='controls aggresiveness of update')
   parser.add_argument('--hope', type=int, default=1, choices=range(1,3),
                      help='how to select hope candidate. options: '
@@ -242,7 +242,7 @@ def evaluate(testset, weights, ini, script_dir, out_dir):
   evaluator = '{}/../utils/decode-and-evaluate.pl'.format(script_dir)
   try:
     p = subprocess.Popen([evaluator, '-c', ini, '-w', weights, '-i', testset, 
-                         '-d', out_dir], stdout=subprocess.PIPE)
+                         '-d', out_dir, '--jobs', args.jobs], stdout=subprocess.PIPE)
     results, err = p.communicate()
     bleu, results = results.split('\n',1)
   except subprocess.CalledProcessError:
@@ -443,7 +443,7 @@ def optimize(args, script_dir, dev_size):
     new_weights_file = '{}/weights.{}'.format(args.output_dir, i+1)
     last_weights_file = '{}/weights.{}'.format(args.output_dir, i)
     i += 1
-    weight_files = args.output_dir+'/weights.pass*/weights.mira-pass*[0-9].gz'
+    weight_files = weightdir+'/weights.mira-pass*.*[0-9].gz'
     average_weights(new_weights_file, weight_files)
 
   logging.info('BEST ITERATION: {} (SCORE={})'.format(

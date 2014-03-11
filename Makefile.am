@@ -15,7 +15,6 @@ SUBDIRS = \
   training/utils \
   mira-vlad
 
-#  extractor
 
 EXTRA_DIST = corpus tests python/cdec python/tests python/examples compound-split environment
 AUTOMAKE_OPTIONS = foreign

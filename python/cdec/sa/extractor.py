@@ -1,6 +1,7 @@
 from itertools import chain
 import os, sys
 import cdec.configobj
+from cdec.sa._sa import gzip_or_text
 from cdec.sa.features import EgivenFCoherent, SampleCountF, CountEF,\
         MaxLexEgivenF, MaxLexFgivenE, IsSingletonF, IsSingletonFE,\
         IsSupportedOnline
@@ -56,9 +57,13 @@ class GrammarExtractor:
                 )
 
         # lexical weighting tables
-        tt = cdec.sa.BiLex(from_binary=config['lex_file'])
+        if not online:
+            tt = cdec.sa.BiLex(from_binary=config['lex_file'])
+        else:
+            tt = cdec.sa.online.Bilex(config['bilex_file'])
 
         # TODO: clean this up
+        # Load data and add features for online grammar extraction
         extended_features = []
         if online:
             extended_features.append(IsSupportedOnline)
