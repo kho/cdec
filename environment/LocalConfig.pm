@@ -37,7 +37,7 @@ my $CCONFIG = {
     'HOST_REGEXP' => qr/^(n|s|d).*\.umiacs\.umd\.edu$/,
     'JobControl'  => 'qsub',
     'QSubMemFlag' => '-l pmem=',
-    'QSubQueue' => '-q batch',
+    'QSubQueue' => '-q wide',
     'QSubExtraFlags' => '-V -l walltime=2:00:00',
     'DefaultJobs' => 15,
   },
