@@ -9,6 +9,8 @@
 #include <string.h>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/regex.hpp>
+#include <boost/algorithm/string/regex.hpp>
 #include <boost/program_options.hpp>
 
 #include "decoder.h"
@@ -62,7 +64,7 @@ struct LocalScorer
   vector<score_t> w_;
 
   virtual score_t
-  Score(vector<WordID>& hyp, vector<WordID>& ref, const unsigned rank, const unsigned src_len)=0;
+  Score(const vector<WordID>& hyp, const vector<WordID>& ref, const unsigned rank, const unsigned src_len)=0;
 
   virtual void Reset() {} // only for ApproxBleuScorer, LinearBleuScorer
 

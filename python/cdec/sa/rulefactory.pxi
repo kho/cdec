@@ -31,9 +31,6 @@ OnlineFeatureContext = namedtuple('OnlineFeatureContext',
     ['fcount',
      'fsample_count',
      'paircount',
-     'bilex_f',
-     'bilex_e',
-     'bilex_fe'
     ])
 
 cdef class OnlineStats:
@@ -42,9 +39,6 @@ cdef class OnlineStats:
     cdef public phrases_e
     cdef public phrases_fe
     cdef public phrases_al
-    cdef public bilex_f
-    cdef public bilex_e
-    cdef public bilex_fe
 
     def __cinit__(self):
         # Keep track of everything that can be sampled:
@@ -55,11 +49,6 @@ cdef class OnlineStats:
         self.phrases_e = defaultdict(int)
         self.phrases_fe = defaultdict(lambda: defaultdict(int))
         self.phrases_al = defaultdict(lambda: defaultdict(tuple))
-
-        # Bilexical counts
-        self.bilex_f = defaultdict(int)
-        self.bilex_e = defaultdict(int)
-        self.bilex_fe = defaultdict(lambda: defaultdict(int))
 
 cdef int PRECOMPUTE = 0
 cdef int MERGE = 1
@@ -2051,14 +2040,6 @@ cdef class HieroCachingRuleFactory:
             if not stats.phrases_al[f_ph][e_ph]:
                 stats.phrases_al[f_ph][e_ph] = al
             
-        # Update Bilexical counts
-        for e_w in e_words:
-            stats.bilex_e[e_w] += 1
-        for f_w in f_words:
-            stats.bilex_f[f_w] += 1
-            for e_w in e_words:
-                stats.bilex_fe[f_w][e_w] += 1
-
     # Create a rule from source, target, non-terminals, and alignments
     def form_rule(self, f_i, e_i, f_span, e_span, nt, al):
     
@@ -2138,7 +2119,7 @@ cdef class HieroCachingRuleFactory:
             fsample_count = stats.samples_f.get(f, 0)
             d = stats.phrases_fe.get(f, None)
             paircount = d.get(e, 0) if d else 0
-            return OnlineFeatureContext(fcount, fsample_count, paircount, stats.bilex_f, stats.bilex_e, stats.bilex_fe)
+            return OnlineFeatureContext(fcount, fsample_count, paircount)
         return None
     
     # Find all phrases that we might try to extract

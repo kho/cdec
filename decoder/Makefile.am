@@ -32,13 +32,8 @@ EXTRA_DIST = test_data rule_lexer.ll
 libcdec_a_SOURCES = \
   JSON_parser.h \
   aligner.h \
-  apply_fsa_models.h \
   apply_models.h \
   bottom_up_parser.h \
-  cfg.h \
-  cfg_binarize.h \
-  cfg_format.h \
-  cfg_options.h \
   csplit.h \
   decoder.h \
   dwarf.h \
@@ -64,12 +59,10 @@ libcdec_a_SOURCES = \
   ff_ruleshape.h \
   ff_sample_fsa.h \
   ff_soft_syntax.h \
-  ff_soft_syntax2.h \
+  ff_soft_syntax_mindist.h \
   ff_source_path.h \
   ff_source_syntax.h \
   ff_source_syntax2.h \
-  ff_source_syntax2_p.h \
-  ff_source_syntax_p.h \
   ff_spans.h \
   ff_tagger.h \
   ff_wordalign.h \
@@ -79,7 +72,6 @@ libcdec_a_SOURCES = \
   freqdict.h \
   grammar.h \
   hg.h \
-  hg_cfg.h \
   hg_intersect.h \
   hg_io.h \
   hg_remove_eps.h \
@@ -110,7 +102,6 @@ libcdec_a_SOURCES = \
   bottom_up_parser.cc \
   cdec.cc \
   cdec_ff.cc \
-  cfg.cc \
   csplit.cc \
   decoder.cc \
   dwarf.cc \
@@ -133,12 +124,10 @@ libcdec_a_SOURCES = \
   ff_rules.cc \
   ff_ruleshape.cc \
   ff_soft_syntax.cc \
-  ff_soft_syntax2.cc \
+  ff_soft_syntax_mindist.cc \
   ff_source_path.cc \
   ff_source_syntax.cc \
   ff_source_syntax2.cc \
-  ff_source_syntax2_p.cc \
-  ff_source_syntax_p.cc \
   ff_spans.cc \
   ff_tagger.cc \
   ff_wordalign.cc \
