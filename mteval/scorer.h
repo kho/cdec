@@ -25,7 +25,6 @@ class Score : public boost::intrusive_refcount<Score> {
  public:
   virtual ~Score();
   virtual float ComputeScore() const = 0;
-  virtual float ComputeSentScore() const = 0;
   virtual float ComputePartialScore() const =0;
   virtual void ScoreDetails(std::string* details) const = 0;
   std::string ScoreDetails() {

@@ -5,9 +5,9 @@ AM_INIT_AUTOMAKE
 AC_CONFIG_HEADERS(config.h)
 AC_PROG_LIBTOOL
 AC_PROG_LEX
-case $LEX in 
-:) AC_MSG_ERROR([No lex (Flex, lex, etc.) program found]);; 
-esac 
+case $LEX in
+:) AC_MSG_ERROR([No lex (Flex, lex, etc.) program found]);;
+esac
 OLD_CXXFLAGS=$CXXFLAGS
 AC_PROG_CC
 AC_PROG_CXX
@@ -217,7 +217,5 @@ AC_CONFIG_FILES([klm/lm/builder/Makefile])
 # training stuff
 AC_CONFIG_FILES([training/Makefile])
 AC_CONFIG_FILES([training/utils/Makefile])
-AC_CONFIG_FILES([mira-vlad/Makefile])
 
 AC_OUTPUT
-

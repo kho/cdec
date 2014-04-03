@@ -13,7 +13,6 @@ namespace std { using std::tr1::unordered_map; }
 #include "prob.h"
 #include "tdict.h"
 #include "ns.h"
-#include "scorer.h"
 #include "filelib.h"
 #include "stringlib.h"
 
@@ -106,7 +105,10 @@ bool ReadKBestList(const vector<double>& mbr_scale,
 int main(int argc, char** argv) {
   po::variables_map conf;
   InitCommandLine(argc, argv, &conf);
-  const string metric = conf["loss_function"].as<string>();
+  const string smetric = conf["evaluation_metric"].as<string>();
+  EvaluationMetric* metric = EvaluationMetric::Instance(smetric);
+
+  const bool is_loss = (UppercaseString(smetric) == "TER");
   const bool output_list = conf.count("output_list") > 0;
   vector<string> file;
   if (conf.count("input") == 0)
@@ -130,7 +132,6 @@ int main(int argc, char** argv) {
   for (unsigned i = 0; i < file.size(); ++i)
     cerr << "Kbest file " << (i+1) << ": " << file[i] << "\t(scale=" << mbr_scale[i] << ", offset=" << mbr_offset[i] << ")\n";
 
-  ScoreType type = ScoreTypeFromString(metric);
   vector<pair<vector<WordID>, prob_t> > list;
   vector<ReadFile*> rfs(file.size());
   for (unsigned i = 0; i < file.size(); ++i)
@@ -150,15 +151,17 @@ int main(int argc, char** argv) {
     vector<double> mbr_scores(output_list ? list.size() : 0);
     double mbr_loss = numeric_limits<double>::max();
     for (int i = 0 ; i < list.size(); ++i) {
-      vector<vector<WordID> > refs(1, list[i].first);
-      //cerr << i << ": " << list[i].second <<"\t" << TD::GetString(list[i].first) << endl;
-      ScorerP scorer = SentenceScorer::CreateSentenceScorer(type, refs);
+      const vector<vector<WordID> > refs(1, list[i].first);
+      boost::shared_ptr<SegmentEvaluator> segeval = metric->
+          CreateSegmentEvaluator(refs);
+
       double wl_acc = 0;
       for (int j = 0; j < list.size(); ++j) {
         if (i != j) {
-          ScoreP s = scorer->ScoreCandidate(list[j].first);
-          double loss = 1.0 - s->ComputeScore();
-          if (type == TER || type == AER) loss = 1.0 - loss;
+          SufficientStats ss;
+          segeval->Evaluate(list[j].first, &ss);
+          double loss = 1.0 - metric->ComputeScore(ss);
+          if (is_loss) loss = 1.0 - loss;
           double weighted_loss = loss * (joints[j] / marginal).as_float();
           wl_acc += weighted_loss;
           if ((!output_list) && wl_acc > mbr_loss) break;
