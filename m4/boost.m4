@@ -360,10 +360,10 @@ dnl start the for loops).
   boost_failed_libs=
 # Don't bother to ident the 6 nested for loops, only the 2 innermost ones
 # matter.
-for boost_tag_ in -$boost_cv_lib_tag ''; do
-for boost_ver_ in -$boost_cv_lib_version ''; do
-for boost_mt_ in $boost_mt -mt ''; do
-for boost_rtopt_ in $boost_rtopt '' -d; do
+for boost_tag_ in '' -$boost_cv_lib_tag; do
+for boost_ver_ in '' -$boost_cv_lib_version; do
+for boost_mt_ in '' $boost_mt -mt; do
+for boost_rtopt_ in '' $boost_rtopt -d; do
   for boost_lib in \
     boost_$1$boost_tag_$boost_mt_$boost_rtopt_$boost_ver_ \
     boost_$1$boost_tag_$boost_rtopt_$boost_ver_ \
