@@ -10,6 +10,7 @@ import sym
 import log
 import sgml
 
+#LJH what's *EPS*?
 epsilon = sym.fromstring('*EPS*');
 
 class CNStats(object):

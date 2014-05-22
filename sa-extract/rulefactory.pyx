@@ -2,6 +2,8 @@
 # Lopez, EMNLP-CoNLL 2007
 # Much faster than the Python numbers reported there.
 # Note to reader: this code is closer to C than Python
+#!-coding: utf8
+
 import sys
 import sym
 import log
@@ -15,6 +17,9 @@ import precomputation
 import gc
 import cn
 import sgml
+import csyncon
+import csynctx
+import gzip
 
 cimport cmath
 cimport csuf
@@ -24,6 +29,8 @@ cimport rule
 cimport cveb
 cimport precomputation
 cimport calignment
+cimport csyncon
+cimport csynctx
 
 from libc.stdlib cimport malloc, realloc, free
 from libc.string cimport memset, memcpy
@@ -327,6 +334,8 @@ cdef class Sampler:
   cdef int sampleSize
   cdef context_manager
   cdef cintlist.CIntList sa
+  cdef csyncon.SyntacticContraint fsc_train
+  cdef cdat.DataArray fda
 
   def __init__(self, sampleSize=0):
     self.sampleSize = sampleSize
@@ -338,6 +347,8 @@ cdef class Sampler:
   def registerContext(self, context_manager):
     self.context_manager = context_manager
     self.sa = (<csuf.SuffixArray> context_manager.fsarray).sa
+    self.fda = (<csuf.SuffixArray> context_manager.fsarray).darray
+    self.fsc_train = context_manager.syncon
 
 
   def sample(self, PhraseLocation phrase_location):
@@ -389,6 +400,97 @@ cdef class Sampler:
           i = i + stepsize
     return sample
 
+
+
+  def sample_with_syncon(self, PhraseLocation phrase_location, cintlist.CIntList chunklen ):
+    '''Returns a sample of the locations for
+    the phrase. If there are less than self.sampleSize
+    locations, return all of them (need to check whether syn_con);
+    otherwise, return up to self.sampleSize locations (need to check whether syn_con).
+    In the latter case, we might choose to sample iteratively, 
+    until we find up to self.sampleSize locations, or no more options 
+    '''
+    if self.fsc_train is None:
+        return self.sample( phrase_location )
+    
+    cdef cintlist.CIntList sample
+    cdef double i, stepsize
+    cdef int num_locations, val, j
+    cdef int xi, xl, training_sent_id
+    cdef int stepindex
+
+    sample = cintlist.CIntList()
+    if phrase_location.arr is None:
+      '''Note: in this case, it doesn't have X in phrase
+      so no need to check syncon
+      '''
+      num_locations = phrase_location.sa_high - phrase_location.sa_low
+      if self.sampleSize == -1 or num_locations <= self.sampleSize:
+        sample._extend_arr(self.sa.arr + phrase_location.sa_low, num_locations)
+      else:
+        stepsize = float(num_locations)/float(self.sampleSize)
+        i = phrase_location.sa_low
+        while i < phrase_location.sa_high and sample.len < self.sampleSize:
+          '''Note: int(i) not guaranteed to have the desired
+          effect, according to the python documentation'''
+          if fmod(i,1.0) > 0.5:
+            val = int(ceil(i))
+          else:
+            val = int(floor(i))
+          sample._append(self.sa.arr[val])
+          i = i + stepsize
+    else:
+      num_locations = (phrase_location.arr_high - phrase_location.arr_low) / phrase_location.num_subpatterns
+      if self.sampleSize == -1 or num_locations <= self.sampleSize:
+        xi = 0
+        while xi < phrase_location.arr.len:
+          met_sc = 1
+          training_sent_id = self.fda.sent_id.arr[phrase_location.arr.arr[xi]]
+          for xl from 0 <= xl < phrase_location.num_subpatterns - 1:
+            x_start_pos = phrase_location.arr.arr[xi+xl] + chunklen.arr[xl] - self.fda.sent_index.arr[training_sent_id]
+            x_end_pos = phrase_location.arr.arr[xi+xl+1] - 1 - self.fda.sent_index.arr[training_sent_id]
+            if self.fsc_train._is_valid(training_sent_id, x_start_pos, x_end_pos) == 0:
+              met_sc = 0
+              #print "In training sentence #%d, X[%d, %d] failed to satisfy syntactic constraints" % (training_sent_id, x_start_pos, x_end_pos)
+              break
+          if met_sc == 1:
+            #it satisfies the syn_con
+            sample._extend_arr(phrase_location.arr.arr + xi, phrase_location.num_subpatterns)
+          xi = xi + phrase_location.num_subpatterns
+      else:
+        stepsize = float(num_locations)/float(self.sampleSize)
+          
+        stepindex = 0
+        #print "num_locations = %d step_size= %d" % (num_locations, stepsize)
+        while stepindex < stepsize:
+          #print "stepindex = %d len(sample)=%d " % (stepindex, sample.len)
+          i = phrase_location.arr_low + stepindex #the first start point
+          while i < num_locations and sample.len < self.sampleSize * phrase_location.num_subpatterns:
+            '''Note: int(i) not guarateed to have the desired
+            effect, according to the python documentation'''
+            if fmod(i, 1.0) > 0.5:
+              val = int(ceil(i))
+            else:
+              val = int(floor(i))
+              j = phrase_location.arr_low + (val*phrase_location.num_subpatterns)
+            #check syn_con
+            met_sc = 1
+            training_sent_id = self.fda.sent_id.arr[phrase_location.arr.arr[j]]
+            for xl from 0 <= xl < phrase_location.num_subpatterns - 1:
+              x_start_pos = phrase_location.arr.arr[j+xl] + chunklen.arr[xl] - self.fda.sent_index.arr[training_sent_id]
+              x_end_pos = phrase_location.arr.arr[j+xl+1] - 1 - self.fda.sent_index.arr[training_sent_id]
+              if self.fsc_train._is_valid(training_sent_id, x_start_pos, x_end_pos) == 0:
+                met_sc = 0
+                #print "In training sentence #%d, X[%d, %d] failed to satisfy syntactic constraints" % (training_sent_id, x_start_pos, x_end_pos)
+                break
+            if met_sc == 1:
+              sample._extend_arr(phrase_location.arr.arr + j, phrase_location.num_subpatterns)
+            i = i + stepsize
+          if sample.len < self.sampleSize * phrase_location.num_subpatterns:
+            stepindex = stepindex + 1
+          else:
+            break
+    return sample
 
 cdef long nGramCount(PhraseLocation loc):
   return (loc.arr_high - loc.arr_low)/ loc.num_subpatterns
@@ -509,6 +611,9 @@ cdef class HieroCachingRuleFactory:
   cdef csuf.SuffixArray fsa
   cdef cdat.DataArray fda
   cdef cdat.DataArray eda
+  cdef csyncon.SyntacticContraint fsc_train  #ljh: french side syntactic constraints (training dataset)
+  cdef csynctx.SyntacticContext fsynctx_train #ljh: french side syntactic context (training dataset)
+  cdef rule_context_filehandler #ljh: file to store french side syntactic context
   
   cdef calignment.Alignment alignment
   cdef cintlist.CIntList eid2symid
@@ -625,7 +730,7 @@ cdef class HieroCachingRuleFactory:
 
     self.per_sentence_grammar = per_sentence_grammar
     if not self.per_sentence_grammar:
-      self.rule_filehandler = open(rule_file, "w")
+      self.rule_filehandler = gzip.open(rule_file+'.gz', "w")
     # diagnostics
     #if rule_file is None:
     #  self.rule_file = None
@@ -661,6 +766,8 @@ cdef class HieroCachingRuleFactory:
     self.fid2symid = self.set_idmap(self.fda)
     self.eid2symid = self.set_idmap(self.eda)
     self.precompute()
+    self.fsc_train = context_manager.syncon
+    self.fsynctx_train = context_manager.synctx
 
   cdef set_idmap(self, cdat.DataArray darray):
     cdef int word_id, new_word_id, N
@@ -1321,7 +1428,7 @@ cdef class HieroCachingRuleFactory:
           candidate.append([next_id,curr[1]+jump])
     return sorted(result);
 
-  def input(self, fwords, meta):
+  def input(self, fwords, meta, fsc_test=None):
     '''When this function is called on the RuleFactory,
     it looks up all of the rules that can be used to translate
     the input sentence'''
@@ -1331,6 +1438,8 @@ cdef class HieroCachingRuleFactory:
     cdef cintlist.CIntList sample, chunklen
     cdef Matching matching
     cdef rule.Phrase hiero_phrase
+    cdef int iround
+    cdef int sent_id, x_start_pos, x_end_pos, xi
     
     #fwords = [ ((1,0.0,1),), fwords1 ] #word id for <s> = 1, cost = 0.0, next = 1
     #print fwords
@@ -1347,8 +1456,12 @@ cdef class HieroCachingRuleFactory:
     dattrs = sgml.attrs_to_dict(meta)
     id = dattrs.get('id', 'NOID')
     if self.per_sentence_grammar:
-      self.rule_filehandler = open(self.rule_file+'.'+id, 'w')
+      self.rule_filehandler = gzip.open(self.rule_file+'.'+id+'.gz', 'w')
+      if self.fsynctx_train is not None:
+        self.rule_context_filehandler = gzip.open(self.rule_file+'.'+id+'.context.gz', 'w')
     self.excluded_sent_id = int(dattrs.get('exclude', '-1'))
+    
+    sent_id = int(id)
 
     #print "max_initial_size = %i" % self.max_initial_size
 
@@ -1356,11 +1469,14 @@ cdef class HieroCachingRuleFactory:
       self.rules.root = ExtendedTrieNode(phrase_location=PhraseLocation()) 
       self.grammar.root = [None, {}]
 
+    '''ljh
+       add another item into frontier, indicating the starting position of each terminal or nonterminal
+    '''
     frontier = []
     for i in xrange(len(fwords)):
       for alt in xrange(0, len(fwords[i])):
         if fwords[i][alt][0] != cn.epsilon:
-          frontier.append((i, i, alt, 0, self.rules.root, (), False))
+          frontier.append((i, i, alt, 0, self.rules.root, (), (), False))
 
     xroot = None
     x1 = sym.setindex(self.category, 1)
@@ -1373,7 +1489,7 @@ cdef class HieroCachingRuleFactory:
     for i in xrange(self.min_gap_size, len(fwords)):
       for alt in xrange(0, len(fwords[i])):
         if fwords[i][alt][0] != cn.epsilon:
-          frontier.append((i-self.min_gap_size, i, alt, self.min_gap_size, xroot, (x1,), True))
+          frontier.append((i-self.min_gap_size, i, alt, self.min_gap_size, xroot, (x1,), (-1,), True))
     '''for k, i, alt, pathlen, node, prefix, is_shadow_path in frontier:
       if len(prefix)>0:
         print k, i, alt, pathlen, node, map(sym.tostring,prefix), is_shadow_path
@@ -1388,16 +1504,20 @@ cdef class HieroCachingRuleFactory:
       #print "next state of %i" % i
       #print next_states[i]
 
+    iround = -1;
     while len(frontier) > 0:
       #print "frontier = %i" % len(frontier)
       this_iter_intersect_time = self.intersect_time
       new_frontier = []
-      for k, i, alt, pathlen, node, prefix, is_shadow_path in frontier:
-        #print "looking at: "
+      iround =  iround + 1
+      #print "round %i\n" % iround
+      for k, i, alt, pathlen, node, prefix, prefix_start_pos, is_shadow_path in frontier:
+        
         #if len(prefix)>0:
-        #  print k, i, alt, pathlen, node, map(sym.tostring,prefix), is_shadow_path
+        #  print k, i, alt, pathlen, node.phrase, node.phrase_location, map(sym.tostring,prefix), prefix_start_pos, is_shadow_path
         #else:
-        #  print k, i, alt, pathlen, node, prefix, is_shadow_path
+        #  print k, i, alt, pathlen, node.phrase, node.phrase_location, prefix, prefix_start_pos, is_shadow_path
+          
         word_id = fwords[i][alt][0]
         spanlen = fwords[i][alt][2]
         #print "word_id = %i, %s" % (word_id, sym.tostring(word_id))
@@ -1421,11 +1541,36 @@ cdef class HieroCachingRuleFactory:
           continue
         
         phrase = prefix + (word_id,)
+        start_pos = prefix_start_pos + (i,)
         str_phrase = map(sym.tostring, phrase)
         hiero_phrase = rule.Phrase(phrase)
         arity = hiero_phrase.arity()
+        
+        '''ljh
+           for each gap in hiero_phrase, check whether it satisfy syntactic constraints
+           if no, give up the hiero_phrase 
+        '''
+        ''' start checking '''
+        met_sc = 1
+        if (fsc_test is not None) and (arity > 0):
+            for xi in xrange(arity):
+                x_start_pos = start_pos[hiero_phrase.varpos[xi]]
+                x_end_pos = start_pos[hiero_phrase.varpos[xi]+1]-1
+                #see whether span[x_start_pos, x_end_pos] is legal
+                #be careful if x_start_pos is -1 which indicates a shallow case
+                if x_start_pos == -1:
+                    continue
+                if fsc_test.is_valid( sent_id, x_start_pos, x_end_pos ) == False:
+                    #print "Phrase:", str_phrase, " HieroPhrase:", hiero_phrase
+                    #print "In test sentence #%d, X[%d, %d] failed to satisfy syntactic constraints" % (sent_id, x_start_pos, x_end_pos)
+                    #print "NO need to check phrase %s from %d to %d" % (str_phrase, k, i)
+                    met_sc = 0
+                    break
+            if met_sc == 0:
+                continue
+        ''' end checking '''
 
-        #print "pos %2d, node %5d, '%s'" % (i, node.id, hiero_phrase)
+        #print "pos %2d, node %s, '%s'" % (i, node.phrase, hiero_phrase)
         if self.search_file is not None:
           self.search_file.write("%s\n" % hiero_phrase)
 
@@ -1509,14 +1654,17 @@ cdef class HieroCachingRuleFactory:
           # sample from range
           if not is_shadow_path:
             #print "is_not_shadow_path"
-            sample = self.context_manager.sampler.sample(node.phrase_location)
-            #print "node.phrase_location %s" % str(node.phrase_location)
-            #print "sample.len = %i" % len(sample)
             num_subpatterns = (<PhraseLocation> node.phrase_location).num_subpatterns
             chunklen = cintlist.CIntList(initial_len=num_subpatterns)
             for j from 0 <= j < num_subpatterns:
               chunklen.arr[j] = hiero_phrase.chunklen(j)
+              
+            sample = self.context_manager.sampler.sample_with_syncon(node.phrase_location, chunklen)
+            #sample = self.context_manager.sampler.sample(node.phrase_location)
+            #print "node.phrase_location %s" % str(node.phrase_location)
+            #print "sample.len = %i" % len(sample)
             extracts = []
+            extracts_context = []
             j = 0
             extract_start = monitor.cpu()
             '''orig_tight_phrases = self.tight_phrases
@@ -1527,7 +1675,32 @@ cdef class HieroCachingRuleFactory:
               self.require_aligned_terminal = 0
               self.require_aligned_chunks = 0'''
             while j < sample.len:
+              '''ljh
+                 for this sampling, does it satisfy syncon?
+                 we need to check each non-terminal in the sampleing, examine whether it satisfies syncon
+                 note: at this point, we no need to require the whole matched french phrase to satisfy syncon
+                       since the left/right boundary is flexible and can be extended
+                       for example, phrase pattern aXef occurs in a training sentence, aXef doesnot satisfy syncon, 
+                       but it can be extended as aX_{1}efX_{2}, where aX_{1}efX_{2}, X_{2} both satisfy syncon
+              '''
+              '''start checking (no need this anymore since we check syn_con while simpling)
+              met_sc = 1
+              training_sent_id = self.fda.sent_id.arr[sample.arr[j]]
+              for l from 0 <= l < num_subpatterns - 1:
+                x_start_pos = sample.arr[j+l] + chunklen.arr[l] - self.fda.sent_index.arr[training_sent_id]
+                x_end_pos = sample.arr[j+l+1] - 1 - self.fda.sent_index.arr[training_sent_id]
+                if self.fsc_train._is_valid(training_sent_id, x_start_pos, x_end_pos) == 0:
+                  met_sc = 0
+                  print "In training sentence #%d, X[%d, %d] failed to satisfy syntactic constraints" % (training_sent_id, x_start_pos, x_end_pos)
+                  break
+              if met_sc == 0:
+                print "Skip phrase %s from %d to %d" % (str_phrase, sample.arr[j] - self.fda.sent_index.arr[training_sent_id], sample.arr[j+num_subpatterns-1] - self.fda.sent_index.arr[training_sent_id] + chunklen.arr[num_subpatterns-1] - 1)
+                j = j + num_subpatterns
+                continue
+              end checking'''
+                
               extract = []
+              extract_context = []
 
               assign_matching(&matching, sample.arr, j, num_subpatterns, self.fda.sent_id.arr)
               '''print "tight_phrase = "
@@ -1536,9 +1709,16 @@ cdef class HieroCachingRuleFactory:
               print self.require_aligned_terminal
               print "require_aligned_chunks = "
               print self.require_aligned_chunks'''
-              
-              extract = self.extract(hiero_phrase, &matching, chunklen.arr, num_subpatterns)
+              #print "Hiero Phrase: %s" % hiero_phrase
+              if self.fsynctx_train is not None:
+                (extract, extract_context)= self.extract_syncon(hiero_phrase, &matching, chunklen.arr, num_subpatterns)
+              else:
+                extract = self.extract_syncon(hiero_phrase, &matching, chunklen.arr, num_subpatterns)
+              #print "Extracted:"
+              #for f, e, count, als in extract:
+                  #print "f ||| e ||| als ||| count:", f, "|||", e, "|||", als, "|||", count
               extracts.extend(extract)
+              extracts_context.extend(extract_context)
               j = j + num_subpatterns
             '''self.tight_phrases = orig_tight_phrases
             sttice+sa.nw.normelf.require_aligned_terminal = orig_require_aligned_terminal
@@ -1579,12 +1759,27 @@ cdef class HieroCachingRuleFactory:
                   #print "selected = ",alignment," with count = ",count
                   scores = []
                   for m in self.context_manager.models:
-                    scores.append(m.compute_contextless_score(f, e, count, fcount[f], num_samples))
+                    scores.append(m.compute_contextless_score(f, e, count, fcount[f], num_samples, alignment))
                   r = rule.Rule(self.category, f, e, scores=scores, owner="context", word_alignments = alignment)
                   self.grammar.add(r)
                   if self.rule_filehandler is not None:
                     self.rule_filehandler.write("%s\n" % r.to_line())
                   #print "adding a rule = %s" % r
+                  
+            if self.fsynctx_train is not None and len(extracts_context) > 0:
+              fphrases = {}
+              for f, f_context, e, count in extracts_context:
+                fcount.setdefault(f, 0.0)
+                fphrases.setdefault(f, {})
+                fphrases[f].setdefault(e, {})
+                fphrases[f][e].setdefault(f_context, 0.0)
+                fphrases[f][e][f_context] = fphrases[f][e][f_context] + count
+              for f, e_list in fphrases.iteritems():
+                for e, f_context_list in e_list.iteritems():
+                  for f_context, currcount in f_context_list.iteritems():
+                    cr = csynctx.ContextRule(f, f_context, e, currcount)
+                    self.rule_context_filehandler.write("%s\n" % cr.to_line())
+                    
 
         #if len(phrase) < self.max_length and i+spanlen < len(fwords) and pathlen+spanlen < self.max_initial_size:
         if len(phrase) < self.max_length and i+spanlen < len(fwords) and pathlen+1 <= self.max_initial_size:
@@ -1594,7 +1789,7 @@ cdef class HieroCachingRuleFactory:
             #if (fwords[i+spanlen][alt_id][2]+pathlen+spanlen <= self.max_initial_size):
             #new_frontier.append((k, i+spanlen, alt_id, pathlen + spanlen, node, phrase, is_shadow_path))
             #print "alt_id = %d\n" % alt_id
-            new_frontier.append((k, i+spanlen, alt_id, pathlen + 1, node, phrase, is_shadow_path))
+            new_frontier.append((k, i+spanlen, alt_id, pathlen + 1, node, phrase, start_pos, is_shadow_path))
             #print (k, i+spanlen, alt_id, pathlen + spanlen, node, map(sym.tostring,phrase), is_shadow_path)
           #print "end lexicalized"
           num_subpatterns = arity
@@ -1617,9 +1812,9 @@ cdef class HieroCachingRuleFactory:
               nodes_isteps_away_buffer[key] = frontier_nodes
             
             #print "new frontier:\n"
-            for (i, alt, pathlen) in frontier_nodes:
+            for (j, alt, pathlen) in frontier_nodes:
               #if (pathlen+fwords[i][alt][2] <= self.max_initial_size):
-              new_frontier.append((k, i, alt, pathlen, xnode, phrase +(xcat,), is_shadow_path))
+              new_frontier.append((k, j, alt, pathlen, xnode, phrase +(xcat,), start_pos + (i+1,), is_shadow_path))
               #print k, i, alt, pathlen, node, map(sym.tostring,phrase +(xcat,)), is_shadow_path
           #print "all end\n";
           #else:
@@ -1639,11 +1834,167 @@ cdef class HieroCachingRuleFactory:
       self.grammar.dump(self.pruned_rule_file)
     if self.per_sentence_grammar:
       self.rule_filehandler.close()
+      if self.fsynctx_train is not None:
+        self.rule_context_filehandler.close()
 
 #    else:
 #      self.rule_filehandler.write("###EOS_"+ id +"\n")
 
-
+  cdef int find_fixpoint2(self,
+                         int f_low, f_high,
+                         int* f_links_low, int* f_links_high,
+                         int* e_links_low, int* e_links_high,
+                         int e_in_low, int e_in_high,
+                         int* e_low, int* e_high,
+                         int* f_back_low, int* f_back_high,
+                         int f_sent_len, int e_sent_len,
+                         int max_f_len, int max_e_len,
+                         int min_fx_size, int min_ex_size,
+                         int max_new_x,
+                         int allow_low_x, int allow_high_x,
+                         int allow_arbitrary_x, int write_log):
+    '''f_low, f_high: the position of french phrase in f_sent
+       f_links_low, f_links_high, aligned info for each word in f_sent
+       e_links_low, e_links_high, aligned info for each word in e_sent
+       e_in_low, e_in_high
+       e_low, e_high
+       f_back_low, f_back_high
+       f_sent_len, e_sent_len, sentence length for f_sent and e_sent
+       max_f_len, max_e_len, maximum length for french and english phrases
+       min_fx_size, min_ex_size
+       max_new_x, how many Xs are allowed
+       allow_low_x, allow_high_x, whether able to add X on the left and the right side
+       allow_arbitrary_x
+       write_log
+    '''
+    
+    cdef int e_low_prev, e_high_prev, f_low_prev, f_high_prev, new_x, new_low_x, new_high_x
+    e_low[ 0 ] = e_in_low
+    e_high[ 0 ] = e_in_high
+    self.find_projection(f_low, f_high, f_links_low, f_links_high, e_low, e_high)
+    
+    if e_low[ 0 ] == -1:
+        #low-priority corner case: if phrase w is unaligned,
+        #but we don't require aligned terminals, then returning
+        #an error here might prevent extraction of allowed
+        #rule X -> X_1 w X_2 / X_1 X_2. This is probably 
+        #not worth the bother, though.
+        #print "find_fixpoint0"
+        return 0
+    elif e_in_low != -1 and e_low[ 0 ] != e_in_low:
+        if e_in_low - e_low[0] < min_ex_size:
+            e_low[ 0 ] = e_in_low - min_ex_size
+            if e_low[0] < 0:
+                #print "find fixpoint1"
+                return 0
+    
+    if e_high[ 0 ] - e_low[ 0 ] > max_e_len:
+        return 0
+    
+    if e_in_high != -1 and e_high[ 0 ] != e_in_high:
+        if e_high[ 0 ] - e_in_high < min_ex_size:
+            e_high[ 0 ] = e_in_high + min_ex_size
+            if e_high[ 0 ] > e_sent_len:
+                #print "find_fixpoint3"
+                return 0
+    
+    
+    f_back_low[ 0 ] = -1
+    f_back_high[ 0 ] = -1
+    f_low_prev = f_low
+    f_high_pre = f_high
+    new_x = 0
+    new_low_x = 0
+    new_high_x = 0
+    
+    while True:
+        if f_back_low[ 0 ] == -1:
+            self.find_projection(e_low[0], e_high[0], e_links_low, e_links_high, f_back_low, f_back_high)
+        else:
+            self.find_projection(e_low[0], e_low_prev, e_links_low, e_links_high, f_back_low, f_back_high)
+            self.find_projection(e_high_prev, e_high[ 0 ], e_links_low, e_links_high, f_back_low, f_back_high)
+        
+        if f_back_low[ 0 ] > f_low:
+            f_back_low[0] = f_low
+        if f_back_high[ 0 ] < f_high:
+            f_back_high[ 0 ] = f_high
+            
+        if f_back_low[ 0 ] == f_low_prev and f_back_high[ 0 ] == f_high_prev:
+            return 1
+        
+        if allow_low_x == 0 and f_back_low[ 0 ] < f_low:
+            log.writeln( " FAIL: f phrase is not tight")
+            #print " FAIL: f phrase is not tight"
+            return 0
+        if f_back_high[ 0 ] - f_back_low[ 0 ] > max_f_len:
+            log.writeln( " FAIL: f back projection is too wide")
+            #print " FAIL: f back projection is too wide"
+            return 0
+        if allow_high_x == 0 and f_back_high[ 0 ] > f_high:
+            log.writeln( "FAIL: extension on high side not allowed")
+            #print " FAIL: extension on high side not allowed"
+            return 0
+        
+        if f_low != f_back_low[ 0 ]:
+            if new_low_x == 0:
+                if new_x >= max_new_x:
+                    log.writeln( "FAIL: extension required on low side violates max # of gaps" )
+                    #print " FAIL: extension required on low side violates max # of gaps"
+                    return 0
+                else:
+                    new_x = new_x + 1
+                    new_low_x = 1
+            if f_low - f_back_low[0] < min_fx_size:
+                f_back_low[ 0 ] = f_low - min_fx_size
+                if f_back_high[0] - f_back_low[0] > max_f_len:
+                    log.writeln( " FAIL: extension required on low side violates max initial length")
+                    #print " FAIL: extension required on high side violates max # of gaps"
+                    return 0
+                if f_back_low[0] < 0:
+                    log.writeln( " FAIL: extension required on high side violates sentence boundary" )
+                    #print " FAIL: extension required on high side violates sentence boundary")
+                    return 0
+        if f_high != f_back_high[ 0 ]:
+            if new_high_x == 0:
+                if new_x >= max_new_x:
+                    log.writeln(" FAIL: extension required on high side violates max # of gaps")
+                    #print " FAIL: extension required on high side violates max # of gaps"
+                    return 0
+                else:
+                    new_x = new_x + 1
+                    new_high_x = 1
+                if f_back_high[ 0 ] - f_high < min_fx_size:
+                    f_back_high[ 0 ] = f_high + min_fx_size
+                    if f_back_high[ 0 ] - f_back_low[0] > max_f_len:
+                        log.writeln( " FAIL: extension required on high side violates max initial length" )
+                        #print " FAIL: extenstion required on high side violates max initial length" )
+                        return 0
+                    if f_back_high[ 0 ] > f_sent_len:
+                        log.writeln( " FAIL: extension required on high side violates sentence boundary" )
+                        print " FAIL: extension required on high side violates sentence boundary"
+                        return 0
+        e_low_prev = e_low[ 0 ]
+        e_high_prev = e_high[ 0 ]
+        
+        self.find_projection(f_back_low[0], f_low_prev, f_links_low, f_links_high, e_low, e_high)
+        self.find_projection(f_high_prev, f_back_high[ 0 ], f_links_low, f_links_high, e_low, e_high)
+        
+        if e_low[ 0 ] == e_low_prev and e_high[ 0 ] == e_high_prev:
+            return 1
+        
+        if allow_arbitrary_x == 0:
+            log.writeln( " FAIL: arbitrary expansion not permitted")
+            #print " FAIL: arbitrary expansion not permitted"
+            return 0
+        if e_high[ 0 ] - e_low[ 0 ] > max_e_len:
+            log.writeln( " FAIL: re-projection violates sentence max phrase length")
+            #print " FAIL: re-projection violates sentence max phrase length"
+            return 0
+        
+        f_low_prev = f_back_low[ 0 ]
+        f_high_prev = f_back_high[ 0 ]
+        
+        
   cdef int find_fixpoint(self, 
             int f_low, f_high, 
             int* f_links_low, int* f_links_high, 
@@ -1674,7 +2025,7 @@ cdef class HieroCachingRuleFactory:
       if e_in_low - e_low[0] < min_ex_size:
         e_low[0] = e_in_low - min_ex_size
         if e_low[0] < 0:
-          #print "find_fixpoint1"
+          print "find_fixpoint1"
           return 0
 
     if e_high[0] - e_low[0] > max_e_len:
@@ -1684,7 +2035,7 @@ cdef class HieroCachingRuleFactory:
       if e_high[0] - e_in_high < min_ex_size:
         e_high[0] = e_in_high + min_ex_size
         if e_high[0] > e_sent_len:
-          #print "find_fixpoint3"
+          print "find_fixpoint3"
           return 0
 
     f_back_low[0] = -1
@@ -1805,7 +2156,7 @@ cdef class HieroCachingRuleFactory:
     arr_len[0] = new_len
     return arr
 
-
+  
   cdef extract_phrases(self, int e_low, int e_high, int* e_gap_low, int* e_gap_high, int* e_links_low, int num_gaps,
             int f_low, int f_high, int* f_gap_low, int* f_gap_high, int* f_links_low, 
             int sent_id, int e_sent_len, int e_sent_start):
@@ -1934,7 +2285,1153 @@ cdef class HieroCachingRuleFactory:
           ret.append(i*65536+j)
         idx += 2
     return ret
+
+#surppose hiero phrase is aXef
+#num_chunks = 2, chunklen[0]=1 chunklen[1]=2
+#matching contains 1 mapping information, 
+#         including sentence id, number of subpatterns, etc.
+#for simplity, we call the french sentence as f_sen, the english sentence as e_sen
+
+  cdef extract2(self, rule.Phrase phrase, Matching* matching, int* chunklen, int num_chunks):
+    cdef int* sent_links, *e_links_low, *e_links_high, *f_links_low, *f_links_high
+    cdef int *f_gap_low, *f_gap_high, *e_gap_low, *e_gap_high, num_gaps, gap_start
+    cdef int i, j , k, e_i, f_i, num_links, num_aligned_chuns, met_constraints
+    cdef int f_low, f_high, e_low, e_high, f_back_low, f_back_high
+    cdef int e_sent_start, e_sent_end, f_sent_start, f_sent_end, e_sent_len, f_sent_len
+    cdef int e_word_count, f_x_low, f_x_high, e_x_low, e_x_high, phrase_len
+    cdef float pair_count
+    cdef float available_mass
+    cdef extracts, phrase_list
+    cdef cintlist.CIntList fphr_arr
+    cdef rule.Phrase fphr
+    cdef reason_for_failure
+    
+    fphr_arr = cintlist.CIntList( )
+    phrase_len = phrase.n #4, number of NT and T
+    extracts = []
+    sent_links = self.alignment._get_sent_links(matching.sent_id, &num_links) 
+    '''num_links, number of alignment links between f_sen and e_sen
+       sent_links, restored word alignments, len(sent_links) = 2 * num_link, for example 1 3 1 4 ... 
+                   indicating 1-3 is a word pair, 1-4 is another word pair
+    '''
+    
+    e_sent_start = self.eda.sent_index.arr[matching.sent_id] #start position of e_sen
+    e_sent_end = self.eda.sent_index.arr[matching.sent_id+1] #start postion of the next sentence of e_sen
+    e_sent_len = e_sent_end - e_sent_start - 1 #number of words in e_sen, note that there is a END_OF_SENTENCE between two consequent sentences in eda
+    
+    f_sent_start = self.fda.sent_index.arr[matching.sent_id] #similar as e_sent_start
+    f_sent_end = self.fda.sent_index.arr[matching.sent_id+1] #similar as e_sent_end
+    f_sent_len = f_sent_end - f_sent_start - 1 #similar as e_sent_len
+    
+    available_mass = 1.0 
+    if matching.sent_id == self.excluded_sent_id:
+        available_mass = 0.0
+    '''used to nomalize phrase count
+       pair_count = available_mass / len(phrase_list)
+    '''
+    
+    self.findexes1.reset()
+    sofar = 0 #number of terminals and non-terminals
+    for i in xrange(num_chunks): #i = 0, and i= 1
+        for j in xrange(chunklen[i]):
+            self.findexes1.append(matching.arr[matching.start+i]+j-f_sent_start) #get the sentence position of each terminal in the sub_pattern[i]
+            sofar += 1 
+        if ( i+1<num_chunks):
+            self.findexes1.append(phrase[sofar]) #get the index of nonterminal[i]
+            sofar += 1
+    '''self.findexes1 constains the position for (each terminal in the hiero phrase)
+       self.findexes1[0] = a's position in sentence[matching.sent_id]
+       self.findexes1[1] = X's id
+       self.findexes1[2] = e's position in sentence[matching.sent_id]
+       self.findexes1[3] = f's position in sentence[matching.sent_id]
+    '''
+    e_links_low = <int*> malloc(e_sent_len*sizeof(int)) #for each english word, get the minial position index of aligned french words
+    e_links_high = <int*> malloc(e_sent_len*sizeof(int)) # for each english word, get the maximum postion index + 1 of aligned french words, note maximum position + 1
+    f_links_low = <int*> malloc(f_sent_len*sizeof(int)) #similar as e_links_low
+    f_links_high = <int*> malloc(f_sent_len*sizeof(int)) #similar as e_links_high
+    
+    f_gap_low = <int*> malloc((num_chunks+1)*sizeof(int))
+    f_gap_high = <int*> malloc((num_chunks+1)*sizeof(int))
+    e_gap_low = <int*> malloc((num_chunks+1)*sizeof(int))
+    e_gap_high = <int*> malloc((num_chunks+1)*sizeof(int))
+    memset(f_gap_low, 0, (num_chunks+1)*sizeof(int))
+    memset(f_gap_high, 0, (num_chunks+1)*sizeof(int))
+    memset(e_gap_low, 0, (num_chunks+1)*sizeof(int))
+    memset(e_gap_high, 0, (num_chunks+1)*sizeof(int))
+    '''no idea about the four items
+    '''
+    
+    reason_for_failure = ""
+    
+    for i from 0 <= i < e_sent_len:
+        e_links_low[i] = -1
+        e_links_low[i] = -1
+    for i from 0 <= i < f_sent_len:
+        f_links_low[i] = -1
+        f_links_low[i] = -1
+    
+    i = 0
+    while i < num_links * 2:
+        f_i = sent_links[i]
+        e_i = sent_links[i+1]
+        if f_links_low[f_i] == -1 or f_links_low[f_i] > e_i:
+            f_links_low[f_i] = e_i
+        if f_links_high[f_i] == -1 or f_links_high[f_i] < e_i + 1:
+            f_links_high[f_i] = e_i + 1 #note: position + 1
+        if e_links_low[e_i] == -1 or e_links_low[e_i] > f_i:
+            e_links_low[e_i] = f_i
+        if e_links_high[e_i] == -1 or e_links_high[e_i] < f_i + 1:
+            e_links_high[e_i] = f_i + 1 #note: position + 1
+        i = i + 2
+      
+    als = []
+    for x in xrange(matching.start,matching.end):
+        al = (matching.arr[x] - f_sent_start, f_links_low[matching.arr[x]-f_sent_start]) 
+        '''for the first word in each subpattern of hiero phrase, e.g., a and e, get its start position in f_sen, and the maximum positon of its aligned english word
+        '''
+        als.append(al)
+    '''len(als) = num_cunks, 2
+    '''
+    #check all source-side alignment constraints
+    met_constraints = 1
+    if self.require_aligned_terminal:
+        num_aligned_chunks = 0
+        for i from 0 <= i < num_chunks:
+            for j from 0 <= j < chunklen[i]:
+                if f_links_low[matching.arr[matching.start+i]+j-f_sent_start] > -1:
+                    num_aligned_chunks = num_aligned_chunks + 1
+                    break
+        if num_aligned_chunks == 0:
+            reason_for_failure = "No aligned terminals"
+            met_constraints = 0
+        if self.require_aligned_chunks and num_aligned_chunks < num_chunks:
+            reason_for_failure = "Unaligned chunk"
+            met_constraints = 0
+    ''' the if statement checks whether it requires at least one aligned word in the hiero phrase, e.g, one of (a, e, f) must be aligned
+        or at least one aligned word in each subpattern, e.g., a must be aligned, one of (e and f) must be aligned
+    '''
+            
+    if met_constraints and self.tight_phrases:
+        #outside edge constraints are checked later
+        #check each non-terminal X, whether it's tight
+        for i from 0 <= i < num_chunks-1:
+            if f_links_low[matching.arr[matching.start+i]+chunklen[i]-f_sent_start] == -1: #the first word covered by non-terminal
+                reason_for_failure = "Gaps are not tight phrases"
+                met_constraints = 0
+                break
+            if f_links_low[matching.arr[matching.start+i+1]-1-f_sent_start] == -1: #the last word covered by non-terminal
+                reason_for_failure = "Gaps are not tight phrases"
+                met_constraints = 0
+                break
+    
+    f_low = matching.arr[matching.start] = f_sent_start #phrase start postion in array
+    f_high = matching.arr[matching.start+matching.size - 1] + chunklen[num_chunks-1] - f_sent_start #phrase end postion in array + 1
+    
+    if met_constraints:
         
+        '''what does this if statement do??
+           f_low, f_high are valued, indicating the phrase start postion and (end postion + 1) in array
+           f_links_low and f_links_high are valued, indicating the aligned english words 
+           e_links_low and e_links_high are also valued, indicating the aligned french words
+           
+           e_low, e_high are NOT valued,  int type ?? the lowest/highest english word aligned to [f_low, f_high]
+           f_back_low and f_back_high are NOT valued, int type ?? according to english phrase[e_low, e_high], the lowest/highest french word aligned to [e_low, e_high]
+           
+           f_sent_len, e_sent_len are valued, indicating sentence length
+           self.train_min_gap_size is valued, indicating the minumal words covered by X in TRAINING data
+           self.max_nonterminals - num_chunks + 1, indicating the maximum number of non-terminal can be added into the current hiero phrase  
+        '''
+        if self.find_fixpoint(f_low, f_high, f_links_low, f_links_high, e_links_low, e_links_high,
+                              -1, -1, &e_low, &e_high, &f_back_low, &f_back_high, f_sent_len, e_sent_len,
+                              self.train_max_initial_size, self.train_max_initial_size,
+                              self.train_min_gap_size, 0,
+                              self.max_nonterminals -num_chunks + 1, 1, 1, 0, 0):
+            gap_error = 0
+            num_gaps = 0
+            if f_back_low < f_low:
+                '''f_low is not a start point of an initial phrase
+                '''
+                f_gap_low[0] = f_back_low
+                f_gap_high[0] = f_low
+                num_gaps = 1
+                gap_start = 0 #indicating the phrase starts from X?
+                phrase_len = phrase_len+1 #phrase_len is the number of terminals and non-terminals in hiero phrase
+                if phrase_len > self.max_length:
+                    gap_error = 1
+                if self.tight_phrases:
+                    if f_links_low[f_back_low] == -1 or f_links_low[f_low-1] == -1:
+                        '''f_sen[f_back_low, f_low-1] is an potential proceding X
+                        '''
+                        gap_error = 1
+                        reason_for_failure = "Inside edges of preceding subphrase are not tight"
+            else:
+                '''f_low is a start point of an intial phrase, but it is possible that f_sen[f_low] is unaligned
+                   if f_low is unaligned, f_back_low > f_low 
+                '''
+                gap_start = 1 #indicating the phrase starts from X?
+                if self.tight_phrases and f_links_low[f_low] == -1:
+                    #this is not a hard error. we can't extract this phrase
+                    #but we still might be able to extract a superphrase
+                    met_constraints = 0
+                    
+            for i from 0 <= i < matching.size - 1:
+                '''because f_gap_low[0] is valued if f_back_low < f_low
+                '''
+                f_gap_low[1+i] = matching.arr[matching.start+i] + chunklen[i] - f_sent_start
+                f_gap_high[1+i] = matching.arr[matching.start+i+1] - f_sent_start
+                num_gaps = num_gaps+1
+                
+            if f_high < f_back_high:
+                '''now know gap_start = 0 for f_back_low < f_low, otherwises gap_start =1
+                '''
+                f_gap_low[gap_start+num_gaps] = f_high
+                f_gap_high[gap_start+num_gaps] = f_back_high
+                num_gaps = num_gaps + 1
+                phrase_len = phrase_len + 1
+                if phrase_len > self.max_length:
+                    gap_error = 1
+                if self.tight_phrases:
+                    if f_links_low[f_back_high-1] == -1 or f_links_low[f_high] == -1:
+                        '''f_sen[f_high, f_back_high-1] is an potential following X
+                        '''
+                        gap_error = 1
+                        reason_for_failure = "Iniside edges of following subphrase are not tight"
+            else:
+                if self.tight_phrases and f_links_low[f_high-1] == -1:
+                    met_constraints = 0
+                    
+            if gap_error == 0:
+                e_word_count = e_high - e_low
+                for i from 0 <= i < num_gaps: #check integrity of subphrases ?what's integrity? for a X_f, X_e pair, each word in X_f must be either unaligned or aligned to an english word in X_e, and vice versa 
+                    if self.find_fixpoint(f_gap_low[gap_start+i], f_gap_high[gap_start+i],
+                                          f_links_low, f_links_high, e_links_low, e_links_high,
+                                          -1, -1, e_gap_low+gap_start+i, e_gap_high+gap_start+i,
+                                          f_gap_low+gap_start+i, f_gap_high+gap_start+i,
+                                          f_sent_len, e_sent_len,
+                                          self.train_max_initial_size, self.train_max_initial_size,
+                                          0, 0, 0, 0, 0, 0, 0) == 0:
+                        gap_error = 1
+                        reason_for_failure = "Subphrase [%d, %d] failed integrity check" % (f_gap_low[gap_start+i], f_gap_high[gap_start+i])
+                        '''what does this if statement mean? return 0
+                        '''
+            if gap_error == 0:
+                i = 1
+                self.findexs.reset()
+                if f_back_low < f_low:
+                    fphr_arr._append(sym.setindex(self.category,i))
+                    i = i+1
+                    self.findexes.append(sym.setindex(self.category,i)) #why 
+                self.findexes.extend(self.findexes1)
+                for j from 0 <= j < phrase.n:
+                    if sym.isvar(phrase.syms[j]):
+                        fphr_arr._append(sym.setindex(self.category,i))
+                        i = i+1
+                    else:
+                        fphr_arr.append(phrase.syms[j])
+                if f_back_high > f_high:
+                    fphr_arr._append(sym.setindex(self.category,i))
+                    self.findexes.append(sym.setindex(self.category,i))
+                    
+                fphr = rule.Phrase(fphr_arr)
+                '''fphr is a real hiero phrase (initial phrase)
+                   if no proceding X and no following X, fphr_arr is phrase
+                '''
+                if met_constraints:
+                    phrase_list = self.extract_phrases(e_low, e_high, e_gap_low + gap_start, e_gap_high + gap_start, e_links_low, num_gaps,
+                                                       f_back_low, f_back_high, f_gap_low + gap_start, f_gap_high + gap_start, f_links_low,
+                                                       matching.sent_id, e_sent_len, e_sent_start)
+                    #print "e_low=%d, e_high=%d, gap_start=%d, num_gaps=%d, f_back_low=%d, f_back_high=%d" & (e_low, e_high, gap_start, num_gaps, f_back_low, f_back_high)
+                    if len(phrase_list) > 0:
+                        pair_count = available_mass / len(phrase_list) #in what cases, len(phrase_list) > 1??
+                    else:
+                        pair_count = 0 #why would this happen??
+                        reason_for_failure = "Didn't extract anything from [%d, %d] -> [%d, %d]" % (f_back_low, f_back_high, e_low, e_high)
+                    for (phrase2,eindexes) in phrase_list:
+                        als1 = self.create_alignments(sent_links,num_links,self.findexs,eindexes)
+                        extracts.append((fphr, phrase2, pair_count, tuple(als1)))
+                        if self.extract_file:
+                            self.extract_file.write("%s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_back_low, f_back_high, e_low, e_high))
+                            #print "extract_phrases1: %s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_back_low, f_back_high, e_low, e_high)
+                
+                if (num_gaps < self.max_nonterminals and
+                    phrase_len < self.max_length and
+                    f_back_high - f_back_low + self.train_min_gap_size <= self.train_max_initial_size):
+                    if ( f_back_low == f_low and
+                         f_low >= self.train_min_gap_size and
+                         ((not self.tight_phrases) or (f_links_low[f_low-1] != -1 and f_links_low[f_back_high-1] != -1))):
+                        f_x_low = f_low-self.train_min_gap_size
+                        '''supposing f_back_low == f_low, i.e, f_low is a start point of an initial phrase
+                           add a X to the left of the real hiero phrase
+                           and decide the left boundaries of the X
+                           if syntactic constraints are valid, the span of this potential X must also be consistent with the constraints
+                        '''
+                        '''how could we know f_x_low = f_low-self.train_min_gap_size is cool? 
+                           If f_len[f_low-self.train_min_gap_size] is not a start point of an intial phrase
+                           then where to move backword one word by one word??
+                        '''
+                        met_constraints = 1
+                        if self.tight_phrases:
+                            while f_x_low >= 0 and f_links_low[f_x_low] == -1:
+                                f_x_low = f_x_low - 1
+                        if f_x_low < 0 or f_back_high - f_x_low > self.train_max_initial_size:
+                            met_constraints = 0
+                        
+                        if (met_constraints and 
+                            self.find_fixpoint(f_x_low, f_back_high, 
+                                               f_links_low, f_links_high, e_links_low, e_links_high,
+                                               e_low, e_high, &e_x_low, &e_x_high, &f_x_low, &f_x_high,
+                                               f_sent_len, e_sent_len,
+                                               self.train_max_initial_size, self.train_max_initial_size,
+                                               1, 1, 1, 1, 0, 1, 0) and
+                            ((not self.tight_phrases) or f_links_low[f_x_low] != -1) and
+                            self.find_fixpoint(f_x_low, f_low, #check integrity of new subphrase
+                                               f_links_low, f_links_high, e_links_low, e_links_high,
+                                               -1, -1, e_gap_low, e_gap_high, f_gap_low, f_gap_high,
+                                               f_sent_len, e_sent_len,
+                                               self.train_max_initial_size, self.train_max_initial_size,
+                                               0, 0, 0, 0, 0, 0, 0)):
+                            '''adding a new X to the left of the real hiero phrase is permitted
+                            '''
+                            fphr_arr._clear()
+                            i = 1
+                            self.findexes.reset()
+                            self.findexes.append(sym.setindex(self.category, i))
+                            fphr_arr._append(sym.setindex(self.category,i))
+                            i = i+1
+                            self.findexes.extend(self.findexes1)
+                            for j from 0 <= j < phrase.n:
+                                if sym.isvar(phrase.syms[j]):
+                                    fphr_arr._append(sym.setindex(self.category, i))
+                                    i = i+1
+                                else:
+                                    fphr_arr._append(phrase.syms[j])
+                            if f_back_high > f_high:
+                                fphr_arr._append(sym.setindex(self.category,i))
+                                self.findexes.append(sym.setindex(self.category,i))
+                            fphr = rule.Phrase(fphr_arr)
+                            phrase_list = self.extract_phrases(e_x_low, e_x_high, e_gap_low, e_gap_high, e_links_low, num_gaps+1,
+                                                              f_x_low, f_x_high, f_gap_low, f_gap_high, f_links_low, matching.sent_id,
+                                                              e_sent_len, e_sent_start)
+                            if len(phrase_list) > 0:
+                                pair_count = available_mass / len(phrase_list)
+                            else:
+                                pair_count = 0
+                            for phrase2,eindexes in phrase_list:
+                                als2 = self.create_alignments(sent_links, num_links, self.findexes, eindexes)
+                                extracts.append((fphr, phrase2, pair_count, tuple(als2)))
+                                if self.extract_file:
+                                    self.extract_file.write("%s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_x_low, f_x_high, e_x_low, e_x_high))
+                                    #print "extract_phrases2: %s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_x_low, f_x_high, e_x_low, e_x_high)"
+                    
+                    if (f_back_high == f_high and 
+                        f_sent_len - f_high >= self.train_min_gap_size and
+                        ((not self.tight_prahses) or (f_links_low[f_high] != -1 and f_links_low[f_back_low] != -1))):
+                        f_x_high = f_high+self.train_min_gap_size
+                        '''supposing f_back_high == f_high, i.e, f_high is an end point of an initial phrase
+                           add a X to the right of the real hiero phrase
+                           and decide the right boundaries of the X
+                           if syntactic constraints are valid, the span of this potential X must also be consistent with the constraints
+                        '''
+                        met_constraints = 1
+                        if self.tight_phrases:
+                            while f_x_high <= f_sent_len and f_links_low[f_x_high-1] == -1:
+                                f_x_high = f_x_high + 1
+                        if f_x_high > f_sent_len or f_x_high - f_back_low > self.train_max_initial_size:
+                            met_constraints = 0
+                        
+                        if (met_constraints and
+                            self.find_fixpoint(f_back_low, f_x_high,
+                                               f_links_low, f_links_high, e_links_low, e_links_high,
+                                               e_low, e_high, &e_x_low, &e_x_high, &f_x_low, &f_x_high,
+                                               f_sent_len, e_sent_len,
+                                               self.train_max_initial_size, self.train_max_initial_size,
+                                               1, 1, 1, 0, 1, 1, 0) and
+                            ((not self.tight_phrases) or f_links_low[f_x_high-1] != -1) and
+                            self.find_fixpoint(f_high, f_x_high, #check the integrity of the new X
+                                               f_links_low, f_links_high, e_links_low, e_links_high,
+                                               -1, -1, e_gap_low+gap_start+num_gaps, e_gap_high+gap_start+num_gaps,
+                                               f_gap_low+gap_start+num_gaps, f_gap_high+gap_start+num_gaps,
+                                               f_sent_len, e_sent_len,
+                                               self.train_max_initial_size, self.train_max_initial_size,
+                                               0, 0, 0, 0, 0, 0, 0)):
+                            fphr_arr._clear()
+                            i = 1
+                            self.findexes.reset()
+                            if f_back_low < f_low:
+                                fphr_arr._append(sym.setindex(self.category, i))
+                                i = i+1
+                                self.findexes.append(sym.setindex(self.category, i))
+                            self.findexes.extend(self.findexes1)
+                            for j from 0 <= j < phrase.n:
+                                if sym.isvar(phrase.syms[j]):
+                                    fphr_arr._append(sym.setindex(self.category, i))
+                                    i = i+1
+                                else:
+                                    fphr_arr._append(phrase.syms[j])
+                            fphr_arr._append(sym.setindex(self.category,i))
+                            self.findexes.append(sym.setindex(self.category, i))
+                            fphr = rule.Phrase(fphr_arr)
+                            phrase_list = self.extract_phrases(e_x_low, e_x_high, e_gap_low+gap_start, e_gap_high+gap_start, e_links_low, num_gaps+1,
+                                                               f_x_low, f_x_high, f_gap_low+gap_start, f_gap_high+gap_start, f_links_low,
+                                                               matching.sent_id, e_sent_len, e_sent_start)
+                            if len(phrase_list) > 0:
+                                pair_count = available_mass / len(phrase_list)
+                            else:
+                                pair_count = 0
+                            for phrase2, eindexes in phrase_list:
+                                als3 = self.create_alignments(sent_links, num_links, self.findexes, eindexes)
+                                extracts.append((fphr, phrase2, pair_count, tuple(als3)))
+                                if self.extract_file:
+                                    self.extract_file.write("%s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_x_low, f_x_high, e_x_low, e_x_high))
+                                    #print "extract_phrases3: %s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_x_low, f_x_high, e_x_low, e_x_high)
+                    if (num_gaps < self.max_nonterminals - 1 and
+                        phrase_len+1 < self.max_length and
+                        f_back_high == f_high and
+                        f_back_low == f_low and
+                        f_back_high - f_back_low + (2*self.train_min_gap_size) <= self.train_max_initial_size and
+                        f_low >= self.train_min_gap_size and
+                        f_high <= f_sent_len - self.train_min_gap_size and
+                        ((not self.tight_phrases) or (f_links_low[f_low-1] != -1 and f_links_low[f_high] != -1))):
+                        
+                        met_constraints = 1
+                        f_x_low = f_low - self.train_min_gap_size
+                        '''supposing f_back_low == f_low, i.e, f_low is a start point of an initial phrase
+                           add a X to the left of the real hiero phrase
+                           and decide the left boundaries of the X
+                           if syntactic constraints are valid, the span of this potential X must also be consistent with the constraints
+                        '''
+                        if self.tight_phrases:
+                            while f_x_low >= 0 and f_links_low[f_x_low] == -1:
+                                f_x_low = f_x_low - 1
+                        if f_x_low < 0:
+                            met_constraints = 0
+                        
+                        f_x_high = f_high + self.train_min_gap_size
+                        '''supposing f_back_high == f_high, i.e, f_high is an end point of an initial phrase
+                           add a X to the right of the real hiero phrase
+                           and decide the right boundaries of the X
+                           if syntactic constraints are valid, the span of this potential X must also be consistent with the constraints
+                        '''
+                        if self.tight_phrase:
+                            while f_x_high <= f_sent_len and f_links_low[f_x_high-1] == -1:
+                                f_x_high = f_x_high + 1
+                        if f_x_high > f_sent_len or f_x_high - f_x_low > self.train_max_initial_size:
+                            met_constraints = 0
+                            
+                        if (met_constraints and 
+                            self.find_fixpoint(f_x_low, f_x_high, 
+                                               f_links_low, f_links_high, e_links_low, e_links_high,
+                                               e_low, e_high, &e_x_low, &e_x_high, &f_x_low, &f_x_high,
+                                               f_sent_len, e_sent_len,
+                                               self.train_max_initial_size, self.train_max_initial_size,
+                                               1, 1, 2, 1, 1, 1, 1) != 0 and
+                            ((not self.tight_phrases) or (f_links_low[f_x_low] != -1 and f_links_low[f_x_high-1] != -1)) and
+                            self.find_fixpoint(f_x_low, f_low,
+                                               f_links_low, f_links_high, e_links_low, e_links_high, 
+                                               -1, -1, e_gap_low, e_gap_high, f_gap_low, f_gap_high,
+                                               f_sent_len, e_sent_len,
+                                               self.train_max_initial_size, self.train_max_initial_size,
+                                               0, 0, 0, 0, 0, 0, 0) != 0 and
+                            self.find_fixpoint(f_high, f_x_high,
+                                               f_links_low, f_links_high, e_links_low, e_links_high,
+                                               -1, -1, e_gap_low+1+num_gaps, e_gap_high+1+num_gaps,
+                                               f_gap_low+1+num_gaps, f_gap_high+1+num_gaps,
+                                               f_sent_len, e_sent_len,
+                                               self.train_max_initial_size, self.train_max_initial_size,
+                                               0, 0, 0, 0, 0, 0, 0) != 0):
+                            fphr_arr._clear()
+                            i = 1
+                            self.findexes.reset()
+                            self.findexs.append(sym.setindex(self.category, i))
+                            fphr_arr._append(sym.setindex(self.category, i))
+                            i = i + 1
+                            self.findexes.extend(self.findexes1)
+                            for j from 0 <= j < phrase.n:
+                                if sym.isvar(phrase.syms[j]):
+                                    fphr_arr._append(sym.setindex(self.category, i))
+                                    i = i + 1
+                                else:
+                                    fphr_arr._append(phrase.syms[j])
+                            
+                            fphr_arr._append(sym.setindex(self.category, i))
+                            self.findexes.append(sym.setindex(self.category, i))
+                            fphr = rule.Phrase(fphr_arr)
+                            phrase_linst = self.extract_phrases(e_x_low, e_x_high, e_gap_low, e_gap_high, e_links_low, num_gaps + 2,
+                                                                f_x_low, f_x_high, f_gap_low, f_gap_high, f_links_low, 
+                                                                matching.sent_id, e_sent_len, e_sent_start)
+                            if len( phrase_list) > 0:
+                                pair_count = available_mass / len(phrase_list)
+                            else:
+                                pair_count = 0
+                            for phrase2, eindexes in phrase_list:
+                                als4 = self.create_alignments(sent_links, num_links, self.findexes, eindexes)
+                                extracts.append((fphr, phrase2, pair_count, tuple(als4)))
+                                if self.extract_file:
+                                    self.extract_file.write("%s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_x_low, f_x_high, e_x_low, e_x_high))
+                                    #print "extract_phrases4 %s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_x_low, f_x_high, e_x_low, e_x_high)"
+        else:
+            reason_for_failure = "Unable to extract basic phrase"
+    
+    free(sent_links)
+    free(f_links_low)
+    free(f_links_high)
+    free(e_links_low)
+    free(f_links_high)
+    free(f_gap_low)
+    free(f_gap_high)
+    free(e_gap_low)
+    free(e_gap_high)
+                                                                                                                                                                                    
+                           
+    
+  cdef extract_syncon(self, rule.Phrase phrase, Matching* matching, int* chunklen, int num_chunks):
+    cdef int* sent_links, *e_links_low, *e_links_high, *f_links_low, *f_links_high
+    cdef int *f_gap_low, *f_gap_high, *e_gap_low, *e_gap_high, num_gaps, gap_start
+    cdef int i, j, k, e_i, f_i, num_links, num_aligned_chunks, met_constraints
+    cdef int f_low, f_high, e_low, e_high, f_back_low, f_back_high
+    cdef int e_sent_start, e_sent_end, f_sent_start, f_sent_end, e_sent_len, f_sent_len
+    cdef int e_word_count, f_x_low, f_x_high, e_x_low, e_x_high, phrase_len
+    cdef float pair_count
+    cdef float available_mass
+    cdef extracts, phrase_list
+    cdef cintlist.CIntList fphr_arr
+    cdef rule.Phrase fphr
+    cdef reason_for_failure
+    #the following two variables are used to extract souce side context
+    cdef gap_items
+    cdef extracts_context
+    cdef f_context
+
+    fphr_arr = cintlist.CIntList()
+    phrase_len = phrase.n
+    extracts = []
+    extracts_context = []
+    
+    sent_links = self.alignment._get_sent_links(matching.sent_id, &num_links)
+
+    e_sent_start = self.eda.sent_index.arr[matching.sent_id]
+    e_sent_end = self.eda.sent_index.arr[matching.sent_id+1]
+    e_sent_len = e_sent_end - e_sent_start - 1
+    f_sent_start = self.fda.sent_index.arr[matching.sent_id]
+    f_sent_end = self.fda.sent_index.arr[matching.sent_id+1]
+    f_sent_len = f_sent_end - f_sent_start - 1
+    available_mass = 1.0
+    if matching.sent_id == self.excluded_sent_id:
+      available_mass = 0.0
+
+    self.findexes1.reset()
+    sofar = 0
+    for i in xrange(num_chunks):
+      for j in xrange(chunklen[i]):
+        self.findexes1.append(matching.arr[matching.start+i]+j-f_sent_start);
+        sofar += 1
+      if (i+1<num_chunks):
+        self.findexes1.append(phrase[sofar])
+        sofar += 1
+      
+
+    e_links_low = <int*> malloc(e_sent_len*sizeof(int))
+    e_links_high = <int*> malloc(e_sent_len*sizeof(int))
+    f_links_low = <int*> malloc(f_sent_len*sizeof(int))
+    f_links_high = <int*> malloc(f_sent_len*sizeof(int))
+    f_gap_low = <int*> malloc((num_chunks+1)*sizeof(int))
+    f_gap_high = <int*> malloc((num_chunks+1)*sizeof(int))
+    e_gap_low = <int*> malloc((num_chunks+1)*sizeof(int))
+    e_gap_high = <int*> malloc((num_chunks+1)*sizeof(int))
+    memset(f_gap_low, 0, (num_chunks+1)*sizeof(int))
+    memset(f_gap_high, 0, (num_chunks+1)*sizeof(int))
+    memset(e_gap_low, 0, (num_chunks+1)*sizeof(int))
+    memset(e_gap_high, 0, (num_chunks+1)*sizeof(int))
+
+    reason_for_failure = ""
+
+    for i from 0 <= i < e_sent_len:
+      e_links_low[i] = -1
+      e_links_high[i] = -1
+    for i from 0 <= i < f_sent_len:
+      f_links_low[i] = -1
+      f_links_high[i] = -1
+
+    # this is really inefficient -- might be good to 
+    # somehow replace with binary search just for the f
+    # links that we care about (but then how to look up 
+    # when we want to check something on the e side?)
+    i = 0
+    while i < num_links*2:
+      f_i = sent_links[i]
+      e_i = sent_links[i+1]
+      if f_links_low[f_i] == -1 or f_links_low[f_i] > e_i:
+        f_links_low[f_i] = e_i
+      if f_links_high[f_i] == -1 or f_links_high[f_i] < e_i + 1:
+        f_links_high[f_i] = e_i + 1
+      if e_links_low[e_i] == -1 or e_links_low[e_i] > f_i:
+        e_links_low[e_i] = f_i
+      if e_links_high[e_i] == -1 or e_links_high[e_i] < f_i + 1:
+        e_links_high[e_i] = f_i + 1
+      i = i + 2
+    
+    als = []
+    for x in xrange(matching.start,matching.end):
+      al = (matching.arr[x]-f_sent_start,f_links_low[matching.arr[x]-f_sent_start])
+      als.append(al)
+    # check all source-side alignment constraints
+    met_constraints = 1
+    if self.require_aligned_terminal:
+      num_aligned_chunks = 0
+      for i from 0 <= i < num_chunks:
+        for j from 0 <= j < chunklen[i]:
+          if f_links_low[matching.arr[matching.start+i]+j-f_sent_start] > -1:
+            num_aligned_chunks = num_aligned_chunks + 1
+            break
+      if num_aligned_chunks == 0:
+        reason_for_failure = "No aligned terminals"
+        met_constraints = 0
+      if self.require_aligned_chunks and num_aligned_chunks < num_chunks:
+        reason_for_failure = "Unaligned chunk"
+        met_constraints = 0
+
+    if met_constraints and self.tight_phrases:
+      # outside edge constraints are checked later
+      for i from 0 <= i < num_chunks-1:
+        if f_links_low[matching.arr[matching.start+i]+chunklen[i]-f_sent_start] == -1:
+          reason_for_failure = "Gaps are not tight phrases"
+          met_constraints = 0
+          break
+        if f_links_low[matching.arr[matching.start+i+1]-1-f_sent_start] == -1:
+          reason_for_failure = "Gaps are not tight phrases"
+          met_constraints = 0
+          break
+
+    f_low = matching.arr[matching.start] - f_sent_start
+    f_high = matching.arr[matching.start + matching.size - 1] + chunklen[num_chunks-1] - f_sent_start
+    if met_constraints:
+
+      if self.find_fixpoint(f_low, f_high, f_links_low, f_links_high, e_links_low, e_links_high, 
+                -1, -1, &e_low, &e_high, &f_back_low, &f_back_high, f_sent_len, e_sent_len,
+                self.train_max_initial_size, self.train_max_initial_size, 
+                self.train_min_gap_size, 0,
+                self.max_nonterminals - num_chunks + 1, 1, 1, 0, 0) != 0:
+        gap_error = 0
+        num_gaps = 0
+
+        if f_back_low < f_low:
+          f_gap_low[0] = f_back_low
+          f_gap_high[0] = f_low
+          num_gaps = 1
+          gap_start = 0
+          phrase_len = phrase_len+1
+          if phrase_len > self.max_length:
+            gap_error = 1
+          if self.tight_phrases:
+            if f_links_low[f_back_low] == -1 or f_links_low[f_low-1] == -1:
+              gap_error = 1
+              reason_for_failure = "Inside edges of preceding subphrase are not tight"
+          '''ljh
+             check whether the appended X meets syn_con
+          '''
+          '''start checking'''
+          if self.fsc_train is not None:
+            if self.fsc_train._is_valid(matching.sent_id, f_back_low, f_low-1) == 0:
+              gap_error = 1;
+              reason_for_failure = "Inside edges of preceding subphrase doesn't meet syn_con"
+          '''end checking'''
+        else:
+          gap_start = 1
+          if self.tight_phrases and f_links_low[f_low] == -1:
+            # this is not a hard error.  we can't extract this phrase
+            # but we still might be able to extract a superphrase
+            met_constraints = 0
+
+        for i from 0 <= i < matching.size - 1:
+          f_gap_low[1+i] = matching.arr[matching.start+i] + chunklen[i] - f_sent_start
+          f_gap_high[1+i] = matching.arr[matching.start+i+1] - f_sent_start
+          num_gaps = num_gaps + 1
+
+        if f_high < f_back_high:
+          f_gap_low[gap_start+num_gaps] = f_high
+          f_gap_high[gap_start+num_gaps] = f_back_high
+          num_gaps = num_gaps + 1
+          phrase_len = phrase_len+1
+          if phrase_len > self.max_length:
+            gap_error = 1
+          if self.tight_phrases:
+            if f_links_low[f_back_high-1] == -1 or f_links_low[f_high] == -1:
+              gap_error = 1
+              reason_for_failure = "Inside edges of following subphrase are not tight"
+          '''ljh
+             check whether the appended X meets syn_con
+          '''
+          '''start checking'''
+          if self.fsc_train is not None:
+            if self.fsc_train._is_valid(matching.sent_id, f_high, f_back_high-1) == 0:
+              gap_error = 1;
+              reason_for_failure = "Inside edges of following subphrase doesn't meet syn_con"
+          '''end checking'''
+        else:
+          if self.tight_phrases and f_links_low[f_high-1] == -1:
+            met_constraints = 0
+
+        if gap_error == 0:
+          e_word_count = e_high - e_low
+          for i from 0 <= i < num_gaps: # check integrity of subphrases
+            if self.find_fixpoint(f_gap_low[gap_start+i], f_gap_high[gap_start+i], 
+                      f_links_low, f_links_high, e_links_low, e_links_high,
+                      -1, -1, e_gap_low+gap_start+i, e_gap_high+gap_start+i, 
+                      f_gap_low+gap_start+i, f_gap_high+gap_start+i,
+                      f_sent_len, e_sent_len, 
+                      self.train_max_initial_size, self.train_max_initial_size, 
+                      0, 0, 0, 0, 0, 0, 0) == 0:
+              gap_error = 1
+              reason_for_failure = "Subphrase [%d, %d] failed integrity check" % (f_gap_low[gap_start+i], f_gap_high[gap_start+i])
+              break
+
+        if gap_error == 0:
+          i = 1
+          self.findexes.reset()
+          if f_back_low < f_low:
+            fphr_arr._append(sym.setindex(self.category, i))
+            i = i+1
+            self.findexes.append(sym.setindex(self.category, i))
+          self.findexes.extend(self.findexes1)
+          for j from 0 <= j < phrase.n:
+            if sym.isvar(phrase.syms[j]):
+              fphr_arr._append(sym.setindex(self.category, i))
+              i = i + 1
+            else:
+              fphr_arr._append(phrase.syms[j])
+          if f_back_high > f_high:
+            fphr_arr._append(sym.setindex(self.category, i))
+            self.findexes.append(sym.setindex(self.category, i))
+
+          fphr = rule.Phrase(fphr_arr)
+          
+          '''ljh
+             check whether the whole text span should meet syn_con (we have already checked all Xs meet syn_con)
+          '''
+          '''start checking'''
+          if self.fsc_train is not None:
+            if self.fsc_train._is_valid(matching.sent_id, f_back_low, f_back_high-1) == 0:
+              met_constraints = 0;
+          '''end checking'''
+          
+          if met_constraints:
+            '''ljh
+               extract source side (syntactic) context
+            '''
+            '''start extracting'''
+            if self.fsynctx_train is not None:
+              gap_items = []
+              for i from 0 <= i < num_gaps:
+                gap_items.append((f_gap_low[gap_start + i], f_gap_high[gap_start + i] - 1))
+              f_context = self.fsynctx_train.get_syn_ctx(matching.sent_id, gap_items, f_back_low, f_back_high - 1)
+            '''end extracting'''
+            phrase_list = self.extract_phrases(e_low, e_high, e_gap_low + gap_start, e_gap_high + gap_start, e_links_low, num_gaps,
+                      f_back_low, f_back_high, f_gap_low + gap_start, f_gap_high + gap_start, f_links_low,
+                      matching.sent_id, e_sent_len, e_sent_start)
+            #print "e_low=%d, e_high=%d, gap_start=%d, num_gaps=%d, f_back_low=%d, f_back_high=%d" & (e_low, e_high, gap_start, num_gaps, f_back_low, f_back_high)
+            if len(phrase_list) > 0:
+              pair_count = available_mass / len(phrase_list)
+            else:
+              pair_count = 0
+              reason_for_failure = "Didn't extract anything from [%d, %d] -> [%d, %d]" % (f_back_low, f_back_high, e_low, e_high)
+            for (phrase2,eindexes) in phrase_list:
+              als1 = self.create_alignments(sent_links,num_links,self.findexes,eindexes)    
+              extracts.append((fphr, phrase2, pair_count, tuple(als1)))
+              if self.fsynctx_train is not None:
+                extracts_context.append((fphr, f_context, phrase2, pair_count))
+              #if f_back_low < f_low or f_back_high > f_high: #for example, f1 X ||| e1 X e2
+              #print "extract_phrases1: %s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_back_low, f_back_high, e_low, e_high)
+              if self.extract_file:
+                self.extract_file.write("%s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_back_low, f_back_high, e_low, e_high))
+                #print "extract_phrases1: %s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_back_low, f_back_high, e_low, e_high)
+
+          if (num_gaps < self.max_nonterminals and
+            phrase_len < self.max_length and
+            f_back_high - f_back_low + self.train_min_gap_size <= self.train_max_initial_size):
+            if (f_back_low == f_low and 
+                f_low >= self.train_min_gap_size and
+                ((not self.tight_phrases) or (f_links_low[f_low-1] != -1 and f_links_low[f_back_high-1] != -1))):
+              f_x_low = f_low-self.train_min_gap_size
+              met_constraints = 1
+              
+              f_x_low = f_x_low + 1
+              while True:
+                f_x_low = f_x_low - 1
+                #print "WHILE TRUE1:f_x_low=%d" % f_x_low
+                '''ljh
+                   [f_x_low, f_low-1] must satisfy syncon
+                   we combine syncon and tight constraints together to find appropriate f_x_low
+                   the original tight constraints check is commented afterwords
+                '''
+                '''start checking'''
+                if self.fsc_train is not None:
+                  while (f_x_low >= 0 and 
+                         ( self.fsc_train._is_valid(matching.sent_id, f_x_low, f_low-1) == 0 or 
+                           (self.tight_phrases and f_links_low[f_x_low] == -1))):
+                    f_x_low = f_x_low - 1
+                elif self.tight_phrases:
+                  while f_x_low >= 0 and f_links_low[f_x_low] == -1:
+                    f_x_low = f_x_low - 1
+                if f_x_low < 0 or f_back_high - f_x_low > self.train_max_initial_size:
+                  met_constraints = 0
+                '''end checking'''
+                    
+                '''start original checking for tight
+                if self.tight_phrases:
+                  while f_x_low >= 0 and f_links_low[f_x_low] == -1:
+                    f_x_low = f_x_low - 1
+                if f_x_low < 0 or f_back_high - f_x_low > self.train_max_initial_size:
+                  met_constraints = 0
+                end original checking for tight'''
+
+                if met_constraints == 0:
+                    break
+
+                if (met_constraints and
+                  self.find_fixpoint(f_x_low, f_back_high,
+                        f_links_low, f_links_high, e_links_low, e_links_high, 
+                        e_low, e_high, &e_x_low, &e_x_high, &f_x_low, &f_x_high, 
+                        f_sent_len, e_sent_len, 
+                        self.train_max_initial_size, self.train_max_initial_size, 
+                        1, 1, 1, 1, 0, 1, 0) != 0 and
+                  ((not self.tight_phrases) or f_links_low[f_x_low] != -1) and
+                  ((self.fsc_train is None) or (self.fsc_train._is_valid(matching.sent_id, f_x_low, f_low - 1) == 1 and self.fsc_train._is_valid(matching.sent_id, f_x_low, f_back_high - 1) == 1)) and #ljh: note f_x_low might be changed after calling find_fixpoint, need to make sure [f_x_low, flow-1] satisfy constraint
+                  self.find_fixpoint(f_x_low, f_low,  # check integrity of new subphrase
+                        f_links_low, f_links_high, e_links_low, e_links_high,
+                        -1, -1, e_gap_low, e_gap_high, f_gap_low, f_gap_high, 
+                        f_sent_len, e_sent_len,
+                        self.train_max_initial_size, self.train_max_initial_size,
+                        0, 0, 0, 0, 0, 0, 0) !=0 ):          
+                  fphr_arr._clear()
+                  i = 1
+                  self.findexes.reset()
+                  self.findexes.append(sym.setindex(self.category, i))
+                  fphr_arr._append(sym.setindex(self.category, i))
+                  i = i+1
+                  self.findexes.extend(self.findexes1)
+                  for j from 0 <= j < phrase.n:
+                    if sym.isvar(phrase.syms[j]):
+                      fphr_arr._append(sym.setindex(self.category, i))
+                      i = i + 1
+                    else:
+                      fphr_arr._append(phrase.syms[j])
+                  if f_back_high > f_high:
+                    fphr_arr._append(sym.setindex(self.category, i))
+                    self.findexes.append(sym.setindex(self.category, i))
+                  fphr = rule.Phrase(fphr_arr)
+                  
+                  '''ljh
+                     extract source side (syntactic) context
+                  '''
+                  '''start extracting'''
+                  if self.fsynctx_train is not None:
+                    gap_items = []
+                    gap_items.append((f_x_low, f_low - 1))
+                    for i from 0 <= i < num_gaps:
+                      gap_items.append((f_gap_low[gap_start + i], f_gap_high[gap_start + i] - 1))
+                    f_context = self.fsynctx_train.get_syn_ctx(matching.sent_id, gap_items, f_back_low, f_back_high - 1)
+                  '''end extracting'''
+              
+                  phrase_list = self.extract_phrases(e_x_low, e_x_high, e_gap_low, e_gap_high, e_links_low, num_gaps+1,
+                            f_x_low, f_x_high, f_gap_low, f_gap_high, f_links_low, matching.sent_id, 
+                            e_sent_len, e_sent_start)
+                  if len(phrase_list) > 0:
+                    pair_count = available_mass / len(phrase_list)
+                  else:
+                    pair_count = 0
+                  for phrase2,eindexes in phrase_list:
+                    als2 = self.create_alignments(sent_links,num_links,self.findexes,eindexes)    
+                    extracts.append((fphr, phrase2, pair_count, tuple(als2)))
+                    if self.fsynctx_train is not None:
+                      extracts_context.append((fphr, f_context, phrase2, pair_count))
+                    #if f_back_high > f_high:
+                    #print "extract_phrases2: %s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_x_low, f_x_high, e_x_low, e_x_high)
+                    if self.extract_file:
+                      self.extract_file.write("%s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_x_low, f_x_high, e_x_low, e_x_high))
+                      #print "extract_phrases2: %s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_x_low, f_x_high, e_x_low, e_x_high)
+                  break
+                else:
+                  continue
+
+            if (f_back_high == f_high and 
+              f_sent_len - f_high >= self.train_min_gap_size and
+              ((not self.tight_phrases) or (f_links_low[f_high] != -1 and f_links_low[f_back_low] != -1))):
+              f_x_high = f_high+self.train_min_gap_size
+              met_constraints = 1
+              
+              f_x_high = f_x_high - 1
+              while True:
+                f_x_high = f_x_high + 1
+                #print "WHILE TRUE2:f_x_high=%d" % f_x_high
+                '''ljh
+                   [f_x_low, f_low-1] must satisfy syncon
+                   we combine syncon and tight constraints together to find appropriate f_x_low
+                   the original tight constraints check is commented afterwords
+                '''
+                '''start checking'''
+                if self.fsc_train is not None:
+                  while (f_x_high <= f_sent_len and 
+                         ( self.fsc_train._is_valid(matching.sent_id, f_high, f_x_high-1) == 0 or 
+                           (self.tight_phrases and f_links_low[f_x_high-1] == -1))):
+                    f_x_high = f_x_high + 1
+                elif self.tight_phrases:
+                  while f_x_high <= f_sent_len and f_links_low[f_x_high-1] == -1:
+                    f_x_high = f_x_high + 1
+                if f_x_high > f_sent_len or f_x_high - f_back_low > self.train_max_initial_size:
+                  met_constraints = 0
+                '''end checking'''
+              
+                '''start original checking for tight
+                if self.tight_phrases:
+                  while f_x_high <= f_sent_len and f_links_low[f_x_high-1] == -1:
+                    f_x_high = f_x_high + 1
+                if f_x_high > f_sent_len or f_x_high - f_back_low > self.train_max_initial_size:
+                  met_constraints = 0
+                end orignial checking for tight'''
+                if ( met_constraints == 0 ):
+                  break
+              
+                if (met_constraints and 
+                  self.find_fixpoint(f_back_low, f_x_high, 
+                        f_links_low, f_links_high, e_links_low, e_links_high,
+                        e_low, e_high, &e_x_low, &e_x_high, &f_x_low, &f_x_high, 
+                        f_sent_len, e_sent_len, 
+                        self.train_max_initial_size, self.train_max_initial_size, 
+                        1, 1, 1, 0, 1, 1, 0) != 0 and
+                  ((not self.tight_phrases) or f_links_low[f_x_high-1] != -1) and
+                  ((self.fsc_train is None) or (self.fsc_train._is_valid(matching.sent_id, f_high, f_x_high-1) == 1 and self.fsc_train._is_valid(matching.sent_id, f_back_low, f_x_high - 1) == 1)) and #ljh: note f_x_low might be changed after calling find_fixpoint, need to make sure [f_x_low, flow-1] satisfy constraint
+                  self.find_fixpoint(f_high, f_x_high,
+                        f_links_low, f_links_high, e_links_low, e_links_high,
+                        -1, -1, e_gap_low+gap_start+num_gaps, e_gap_high+gap_start+num_gaps, 
+                        f_gap_low+gap_start+num_gaps, f_gap_high+gap_start+num_gaps, 
+                        f_sent_len, e_sent_len,
+                        self.train_max_initial_size, self.train_max_initial_size,
+                        0, 0, 0, 0, 0, 0, 0) != 0):
+                  fphr_arr._clear()
+                  i = 1
+                  self.findexes.reset()
+                  if f_back_low < f_low:
+                    fphr_arr._append(sym.setindex(self.category, i))
+                    i = i+1
+                    self.findexes.append(sym.setindex(self.category, i))
+                  self.findexes.extend(self.findexes1)
+                  for j from 0 <= j < phrase.n:
+                    if sym.isvar(phrase.syms[j]):
+                      fphr_arr._append(sym.setindex(self.category, i))
+                      i = i + 1
+                    else:
+                      fphr_arr._append(phrase.syms[j])
+                  fphr_arr._append(sym.setindex(self.category, i))
+                  self.findexes.append(sym.setindex(self.category, i))
+                  fphr = rule.Phrase(fphr_arr)
+                  
+                  '''ljh
+                     extract source side (syntactic) context
+                  '''
+                  '''start extracting'''
+                  if self.fsynctx_train is not None:
+                    gap_items = []
+                    for i from 0 <= i < num_gaps:
+                      gap_items.append((f_gap_low[gap_start + i], f_gap_high[gap_start + i] - 1))
+                    gap_items.append((f_high, f_x_high - 1))
+                    f_context = self.fsynctx_train.get_syn_ctx(matching.sent_id, gap_items, f_back_low, f_back_high - 1)
+                  '''end extracting'''
+
+                  phrase_list = self.extract_phrases(e_x_low, e_x_high, e_gap_low+gap_start, e_gap_high+gap_start, e_links_low, num_gaps+1,
+                            f_x_low, f_x_high, f_gap_low+gap_start, f_gap_high+gap_start, f_links_low, 
+                            matching.sent_id, e_sent_len, e_sent_start)
+                  if len(phrase_list) > 0:
+                    pair_count = available_mass / len(phrase_list)
+                  else:
+                    pair_count = 0
+                  for phrase2, eindexes in phrase_list:
+                    als3 = self.create_alignments(sent_links,num_links,self.findexes,eindexes)    
+                    extracts.append((fphr, phrase2, pair_count, tuple(als3)))
+                    if self.fsynctx_train is not None:
+                      extracts_context.append((fphr, f_context, phrase2, pair_count))
+                    #if f_back_low < f_low:
+                      #print "extract_phrases3: %s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_x_low, f_x_high, e_x_low, e_x_high)
+                    if self.extract_file:
+                      self.extract_file.write("%s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_x_low, f_x_high, e_x_low, e_x_high))
+                      #print "extract_phrases3: %s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_x_low, f_x_high, e_x_low, e_x_high)
+                  break
+                else:
+                  continue
+              
+            if (num_gaps < self.max_nonterminals - 1 and 
+              phrase_len+1 < self.max_length and
+              f_back_high == f_high and 
+              f_back_low == f_low and 
+              f_back_high - f_back_low + (2*self.train_min_gap_size) <= self.train_max_initial_size and
+              f_low >= self.train_min_gap_size and
+              f_high <= f_sent_len - self.train_min_gap_size and
+              ((not self.tight_phrases) or (f_links_low[f_low-1] != -1 and f_links_low[f_high] != -1))):
+
+              f_x_low = f_low-self.train_min_gap_size
+              
+              f_x_low = f_x_low + 1
+              while True:
+                met_constraints = 1
+                f_x_low = f_x_low - 1
+                #print "WHILE TRUE3:f_x_low=%d" % f_x_low
+                '''ljh
+                   [f_x_low, f_low-1] must satisfy syncon
+                   we combine syncon and tight constraints together to find appropriate f_x_low
+                   the original tight constraints check is commented afterwords
+                '''
+                '''start checking'''
+                if self.fsc_train is not None:
+                  while (f_x_low >= 0 and 
+                         ( self.fsc_train._is_valid(matching.sent_id, f_x_low, f_low-1) == 0 or 
+                           (self.tight_phrases and f_links_low[f_x_low] == -1))):
+                    f_x_low = f_x_low - 1
+                elif self.tight_phrases:
+                  while f_x_low >= 0 and f_links_low[f_x_low] == -1:
+                    f_x_low = f_x_low - 1
+                if f_x_low < 0:
+                  met_constraints = 0
+                '''end checking'''
+                if met_constraints == 0:
+                    break
+                      
+                '''start original checking for tight
+                if self.tight_phrases:
+                  while f_x_low >= 0 and f_links_low[f_x_low] == -1:
+                    f_x_low = f_x_low - 1
+                if f_x_low < 0:
+                  met_constraints = 0
+                end original checking for tight'''
+
+                f_x_high = f_high+self.train_min_gap_size
+                
+                f_x_high = f_x_high - 1
+                is_found_good_phrase = 0
+                while True:
+                  f_x_high = f_x_high + 1
+                  #print "WHILE TRUE4:f_x_high=%d" % f_x_high
+                  '''ljh
+                     [f_x_low, f_low-1] must satisfy syncon
+                     we combine syncon and tight constraints together to find appropriate f_x_low
+                     the original tight constraints check is commented afterwords
+                  '''
+                  '''start checking'''
+                  if self.fsc_train is not None:
+                    while (f_x_high <= f_sent_len and 
+                           ( self.fsc_train._is_valid(matching.sent_id, f_high, f_x_high-1) == 0 or 
+                             (self.tight_phrases and f_links_low[f_x_high-1] == -1))):
+                      f_x_high = f_x_high + 1
+                  elif self.tight_phrases:
+                    while f_x_high <= f_sent_len and f_links_low[f_x_high-1] == -1:
+                      f_x_high = f_x_high + 1
+                  if f_x_high > f_sent_len or f_x_high - f_x_low > self.train_max_initial_size:
+                    met_constraints = 0
+                  '''end checking'''
+                  if met_constraints == 0:
+                      break
+              
+                  '''start original checking for tight
+                  if self.tight_phrases:
+                    while f_x_high <= f_sent_len and f_links_low[f_x_high-1] == -1:
+                      f_x_high = f_x_high + 1
+                  if f_x_high > f_sent_len or f_x_high - f_x_low > self.train_max_initial_size:
+                    met_constraints = 0
+                  end original checking for tight'''
+
+                  if (met_constraints and
+                    self.find_fixpoint(f_x_low, f_x_high,
+                            f_links_low, f_links_high, e_links_low, e_links_high,
+                            e_low, e_high, &e_x_low, &e_x_high, &f_x_low, &f_x_high, 
+                            f_sent_len, e_sent_len,
+                            self.train_max_initial_size, self.train_max_initial_size, 
+                            1, 1, 2, 1, 1, 1, 1) !=0 and
+                    ((not self.tight_phrases) or (f_links_low[f_x_low] != -1 and f_links_low[f_x_high-1] != -1)) and
+                    ((self.fsc_train is None) or (self.fsc_train._is_valid(matching.sent_id, f_x_low, f_low-1) == 1 and self.fsc_train._is_valid(matching.sent_id, f_high, f_x_high-1) == 1 and self.fsc_train._is_valid(matching.sent_id, f_x_low, f_x_high-1) == 1)) and
+                    self.find_fixpoint(f_x_low, f_low,
+                            f_links_low, f_links_high, e_links_low, e_links_high,
+                            -1, -1, e_gap_low, e_gap_high, f_gap_low, f_gap_high, 
+                            f_sent_len, e_sent_len,
+                            self.train_max_initial_size, self.train_max_initial_size,
+                            0, 0, 0, 0, 0, 0, 0) != 0 and
+                    self.find_fixpoint(f_high, f_x_high,
+                            f_links_low, f_links_high, e_links_low, e_links_high,
+                            -1, -1, e_gap_low+1+num_gaps, e_gap_high+1+num_gaps, 
+                            f_gap_low+1+num_gaps, f_gap_high+1+num_gaps, 
+                            f_sent_len, e_sent_len,
+                            self.train_max_initial_size, self.train_max_initial_size,
+                            0, 0, 0, 0, 0, 0, 0) != 0):
+                    fphr_arr._clear()
+                    i = 1
+                    self.findexes.reset()
+                    self.findexes.append(sym.setindex(self.category, i))
+                    fphr_arr._append(sym.setindex(self.category, i))
+                    i = i+1
+                    self.findexes.extend(self.findexes1)
+                    for j from 0 <= j < phrase.n:
+                      if sym.isvar(phrase.syms[j]):
+                        fphr_arr._append(sym.setindex(self.category, i))
+                        i = i + 1
+                      else:
+                        fphr_arr._append(phrase.syms[j])
+                    fphr_arr._append(sym.setindex(self.category, i))
+                    self.findexes.append(sym.setindex(self.category, i))
+                    fphr = rule.Phrase(fphr_arr)
+                  
+                    '''ljh
+                     extract source side (syntactic) context
+                    '''
+                    '''start extracting'''
+                    if self.fsynctx_train is not None:
+                      gap_items = []
+                      gap_items.append((f_x_low, f_low-1))
+                      for i from 0 <= i < num_gaps:
+                        gap_items.append((f_gap_low[gap_start + i], f_gap_high[gap_start + i] - 1))
+                      gap_items.append((f_high, f_x_high-1))
+                      f_context = self.fsynctx_train.get_syn_ctx(matching.sent_id, gap_items, f_back_low, f_back_high - 1)
+                    '''end extracting'''
+                    
+                    phrase_list = self.extract_phrases(e_x_low, e_x_high, e_gap_low, e_gap_high, e_links_low, num_gaps+2,
+                              f_x_low, f_x_high, f_gap_low, f_gap_high, f_links_low, 
+                              matching.sent_id, e_sent_len, e_sent_start)
+                    if len(phrase_list) > 0:
+                      pair_count = available_mass / len(phrase_list)
+                    else:
+                      pair_count = 0
+                    for phrase2, eindexes in phrase_list:
+                      als4 = self.create_alignments(sent_links,num_links,self.findexes,eindexes)    
+                      extracts.append((fphr, phrase2, pair_count, tuple(als4)))
+                      if self.fsynctx_train is not None:
+                        extracts_context.append((fphr, f_context, phrase2, pair_count))
+                      if self.extract_file:
+                        self.extract_file.write("%s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_x_low, f_x_high, e_x_low, e_x_high))
+                        #print "extract_phrases4 %s ||| %s ||| %f ||| %d: [%d, %d] -> [%d, %d]\n" % (fphr, phrase2, pair_count, matching.sent_id+1, f_x_low, f_x_high, e_x_low, e_x_high)
+                    is_found_good_phrase = 1
+                    break
+                  else:
+                    continue
+                if is_found_good_phrase == 1:
+                  break                      
+      else:
+        reason_for_failure = "Unable to extract basic phrase"
+
+    free(sent_links)
+    free(f_links_low)
+    free(f_links_high)
+    free(e_links_low)
+    free(e_links_high)
+    free(f_gap_low)
+    free(f_gap_high)
+    free(e_gap_low)
+    free(e_gap_high)
+
+    if self.sample_file is not None:
+      self.sample_file.write("%s ||| %d: [%d, %d] ||| %d ||| %s\n" % (phrase, matching.sent_id+1, f_low, f_high, len(extracts), reason_for_failure))
+
+    #print "%s ||| %d: [%d, %d] ||| %d ||| %s\n" % (phrase, matching.sent_id+1, f_low, f_high, len(extracts), reason_for_failure)
+
+    if self.fsynctx_train is not None:
+      return (extracts, extracts_context)
+    return extracts
+
   cdef extract(self, rule.Phrase phrase, Matching* matching, int* chunklen, int num_chunks):
     cdef int* sent_links, *e_links_low, *e_links_high, *f_links_low, *f_links_high
     cdef int *f_gap_low, *f_gap_high, *e_gap_low, *e_gap_high, num_gaps, gap_start
@@ -2055,7 +3552,7 @@ cdef class HieroCachingRuleFactory:
                 -1, -1, &e_low, &e_high, &f_back_low, &f_back_high, f_sent_len, e_sent_len,
                 self.train_max_initial_size, self.train_max_initial_size, 
                 self.train_min_gap_size, 0,
-                self.max_nonterminals - num_chunks + 1, 1, 1, 0, 0):
+                self.max_nonterminals - num_chunks + 1, 1, 1, 0, 0) != 0:
         gap_error = 0
         num_gaps = 0
 
@@ -2168,14 +3665,14 @@ cdef class HieroCachingRuleFactory:
                       e_low, e_high, &e_x_low, &e_x_high, &f_x_low, &f_x_high, 
                       f_sent_len, e_sent_len, 
                       self.train_max_initial_size, self.train_max_initial_size, 
-                      1, 1, 1, 1, 0, 1, 0) and
+                      1, 1, 1, 1, 0, 1, 0) != 0 and
                 ((not self.tight_phrases) or f_links_low[f_x_low] != -1) and
                 self.find_fixpoint(f_x_low, f_low,  # check integrity of new subphrase
                       f_links_low, f_links_high, e_links_low, e_links_high,
                       -1, -1, e_gap_low, e_gap_high, f_gap_low, f_gap_high, 
                       f_sent_len, e_sent_len,
                       self.train_max_initial_size, self.train_max_initial_size,
-                      0, 0, 0, 0, 0, 0, 0)):
+                      0, 0, 0, 0, 0, 0, 0) != 0):
                 fphr_arr._clear()
                 i = 1
                 self.findexes.reset()
@@ -2224,7 +3721,7 @@ cdef class HieroCachingRuleFactory:
                       e_low, e_high, &e_x_low, &e_x_high, &f_x_low, &f_x_high, 
                       f_sent_len, e_sent_len, 
                       self.train_max_initial_size, self.train_max_initial_size, 
-                      1, 1, 1, 0, 1, 1, 0) and
+                      1, 1, 1, 0, 1, 1, 0) != 0 and
                 ((not self.tight_phrases) or f_links_low[f_x_high-1] != -1) and
                 self.find_fixpoint(f_high, f_x_high,
                       f_links_low, f_links_high, e_links_low, e_links_high,
@@ -2232,7 +3729,7 @@ cdef class HieroCachingRuleFactory:
                       f_gap_low+gap_start+num_gaps, f_gap_high+gap_start+num_gaps, 
                       f_sent_len, e_sent_len,
                       self.train_max_initial_size, self.train_max_initial_size,
-                      0, 0, 0, 0, 0, 0, 0)):
+                      0, 0, 0, 0, 0, 0, 0) != 0):
                 fphr_arr._clear()
                 i = 1
                 self.findexes.reset()
@@ -2293,21 +3790,21 @@ cdef class HieroCachingRuleFactory:
                         e_low, e_high, &e_x_low, &e_x_high, &f_x_low, &f_x_high, 
                         f_sent_len, e_sent_len,
                         self.train_max_initial_size, self.train_max_initial_size, 
-                        1, 1, 2, 1, 1, 1, 1) and
+                        1, 1, 2, 1, 1, 1, 1) != 0 and
                 ((not self.tight_phrases) or (f_links_low[f_x_low] != -1 and f_links_low[f_x_high-1] != -1)) and
                 self.find_fixpoint(f_x_low, f_low,
                         f_links_low, f_links_high, e_links_low, e_links_high,
                         -1, -1, e_gap_low, e_gap_high, f_gap_low, f_gap_high, 
                         f_sent_len, e_sent_len,
                         self.train_max_initial_size, self.train_max_initial_size,
-                        0, 0, 0, 0, 0, 0, 0) and
+                        0, 0, 0, 0, 0, 0, 0) != 0 and
                 self.find_fixpoint(f_high, f_x_high,
                         f_links_low, f_links_high, e_links_low, e_links_high,
                         -1, -1, e_gap_low+1+num_gaps, e_gap_high+1+num_gaps, 
                         f_gap_low+1+num_gaps, f_gap_high+1+num_gaps, 
                         f_sent_len, e_sent_len,
                         self.train_max_initial_size, self.train_max_initial_size,
-                        0, 0, 0, 0, 0, 0, 0)):
+                        0, 0, 0, 0, 0, 0, 0) != 0):
                 fphr_arr._clear()
                 i = 1
                 self.findexes.reset()
@@ -2357,4 +3854,3 @@ cdef class HieroCachingRuleFactory:
 
     
     return extracts
-

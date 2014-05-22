@@ -155,7 +155,7 @@ bool Intersect(const Lattice& target, Hypergraph* hg) {
   vector<GrammarPtr> grammars(1, gp);
   Hypergraph tforest;
   ExhaustiveBottomUpParser parser(new_goal, grammars);
-  if (!parser.Parse(target, &tforest))
+  if (!parser.Parse(target, NULL, &tforest))
     return false;
   else
     hg->swap(tforest);

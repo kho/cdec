@@ -438,6 +438,7 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
         ("show_partition,z", "Compute and show the partition (inside score)")
         ("show_conditional_prob", "Output the conditional log prob to STDOUT instead of a translation")
         ("show_cfg_search_space", "Show the search space as a CFG")
+        ("show_alignment", "Output the word alignment")
         ("show_target_graph", po::value<string>(), "Directory to write the target hypergraphs to")
         ("incremental_search", po::value<string>(), "Run lazy search with this language model file")
         ("coarse_to_fine_beam_prune", po::value<double>(), "Prune paths from coarse parse forest before fine parse, keeping paths within exp(alpha>=0)")
@@ -469,6 +470,7 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
 	//@author ferhanture
         ("rules_dir",po::value<string>(),"DISCOURSE FEATURE: Directory to read rule frequency of each document from")
         ("rules_file",po::value<string>(),"DISCOURSE FEATURE: File to read rule frequency of entire collection from")
+        ("scfg_reorderable_syntactic_constrained_glue_grammar", "Reorderable syntactic constrained glue grammar (scfg_no_hiero_glue_grammar must be switched on too)") //added by ljh
         ("df",po::value<vector<string> >()->composing(),"DISCOURSE FEATURE: File to read document frequency (df) values, followed by total number of documents")
         ("mira_compat", "MIRA compatibility mode (applies weight delta if available; outputs number of lines before k-best).")
         ("mr_compat", "MapReduce compatibility mode (reads per-sentence grammar from input)")
@@ -872,7 +874,7 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
 
   if (!SILENT) {
     cerr << "\nINPUT: ";
-    if (buf.size() < 100)
+    if (buf.size() < 1000)  //set 1000, instead of 100, lijunhui
       cerr << buf << endl;
     else {
       size_t x = buf.rfind(" ", 100);
@@ -910,7 +912,7 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
   }
 
   const bool show_tree_structure=conf.count("show_tree_structure");
-  if (!SILENT) forest_stats(forest,"  Init. forest",show_tree_structure,oracle.show_derivation);
+  //if (!SILENT) forest_stats(forest,"  Init. forest",show_tree_structure,oracle.show_derivation); //comment this lijunhui
   if (conf.count("show_expected_length")) {
     const PRPair<prob_t, prob_t> res =
       Inside<PRPair<prob_t, prob_t>,
@@ -1136,7 +1138,11 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
               translations[sent_id] = TD::GetString(trans);
               cerr << "saved" << sent_id << "=" << translations[sent_id] << endl;
           }else {
-              cout << TD::GetString(trans) << endl << flush;
+              if (conf.count("show_alignment")) {
+                  std::string align = ViterbiAlignment(forest);
+                  cout << TD::GetString(trans) << endl << align << endl << flush;
+              } else
+                  cout << TD::GetString(trans) << endl << flush;
           }
       }
       if (joshua_viz) {

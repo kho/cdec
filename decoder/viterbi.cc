@@ -28,7 +28,8 @@ std::string viterbi_stats(Hypergraph const& hg, std::string const& name, bool es
   }
   if (show_derivation) {
     o<<name<<"          derivation: ";
-    o << hg.show_viterbi_tree(false); // last item should be goal (or at least depend on prev items).  TODO: this doesn't actually reorder the nodes in hg.
+    //o << hg.show_viterbi_tree(false); // last item should be goal (or at least depend on prev items).  TODO: this doesn't actually reorder the nodes in hg.
+    o << hg.show_viterbi_tree(true, SPAN|RULE|FEATURES);
     o<<endl;
   }
 #ifdef DEBUG_VITERBI_SORT
@@ -65,6 +66,15 @@ prob_t ViterbiESentence(const Hypergraph& hg, vector<WordID>* result) {
 
 prob_t ViterbiFSentence(const Hypergraph& hg, vector<WordID>* result) {
   return Viterbi<FSentenceTraversal>(hg, result);
+}
+
+std::string ViterbiAlignment(const Hypergraph& hg) {
+	vector<pair<short, short> > align;
+	Viterbi<AlignmentTraversal>(hg, &align);
+	ostringstream o;
+	for (unsigned i = 0; i < align.size(); i++)
+		o << align[i].first << "-" << align[i].second << " ";
+	return o.str();
 }
 
 int ViterbiELength(const Hypergraph& hg) {

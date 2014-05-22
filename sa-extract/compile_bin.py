@@ -9,6 +9,7 @@ import calignment
 import csuf
 import clex
 import precomputation
+import csynctx
 #import parse
 import monitor
 import optparse
@@ -51,6 +52,9 @@ def main(argv=None):
 	parser.add_option("-r", action="store", nargs=7,
 					dest="precomp_args", help="Precompute collocations (Hiero only)", 
 					metavar="max-len=<INT> max-nt=<INT> max-size=<INT> min-gap=<INT> rank1=<INT> rank2=<INT> sa=<FILE>")
+	parser.add_option("-c", "--synctx", 
+					action="store_true", default=False,
+					dest="synctx", help="Compile file into syntactic context")
 	(options, args) = parser.parse_args()
 
 	filetype_opts =  [options.da, options.sa, options.a, options.p]
@@ -111,6 +115,9 @@ def main(argv=None):
 		earray = cdat.DataArray(efile, True)
 		aarray = calignment.Alignment(infilename, True)
 		obj = clex.CLex(aarray, from_data=True, earray=earray, fsarray=fsarray)
+	elif options.synctx:
+		sys.stderr.write("Reading %s as%s syntactic context...\n" % (infilename, bin))
+		obj = csynctx.SyntacticContext(infilename, options.bin)
 	else:
 		sys.stderr.write("Reading %s as%s data array...\n" % (infilename, bin))
 		obj = cdat.DataArray(infilename, options.bin)

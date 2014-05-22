@@ -22,6 +22,8 @@
 #include "ff_dwarf.h"
 #include "ff_external.h"
 #include "ff_hash.h"
+#include "ff_const_reorder.h"
+#include "ff_soft_syn.h"
 
 #ifdef HAVE_GLC
 #include <cdec/ff_glc.h>
@@ -40,6 +42,7 @@ void register_feature_functions() {
   RegisterFF<SourceWordPenalty>();
   RegisterFF<ArityPenalty>();
   RegisterFF<BLEUModel>();
+  RegisterFF<Discourse>();
 
   //TODO: use for all features the new Register which requires static FF::usage(false,false) give name
 #ifdef HAVE_RANDLM
@@ -78,6 +81,8 @@ void register_feature_functions() {
   ff_registry.Register("Dwarf", new FFFactory<Dwarf>);
   ff_registry.Register("External", new FFFactory<ExternalFeature>);
   ff_registry.Register("RuleHashFeatures", new FFFactory<RuleHashFeatures>);
+  ff_registry.Register("ConstReorderFeature", new ConstReorderFeatureFactory());
+  ff_registry.Register("SoftSynFeature", new SoftSynFeatureFactory());
 #ifdef HAVE_GLC
   ff_registry.Register("ContextCRF", new FFFactory<Model1Features>);
 #endif

@@ -14,104 +14,198 @@
 
 using namespace std;
 
+// split: receives a char delimiter; returns a vector of strings
+// By default ignores repeated delimiters, unless argument rep == 1.
+int split_string(const string& str, char delim, int rep, vector<string>* flds) {
+	if (flds != NULL) flds->clear();
+    string work = str;
+    string buf = "";
+    int i = 0;
+    int count = 0;
+    while (i < work.length()) {
+        if (work[i] != delim)
+            buf += work[i];
+        else if (rep == 1) {
+            if (flds != NULL) flds->push_back(buf);
+            buf = "";
+            count++;
+        } else if (buf.length() > 0) {
+        	if (flds != NULL) flds->push_back(buf);
+            buf = "";
+            count++;
+        }
+        i++;
+    }
+    if (!buf.empty()) {
+    	if (flds != NULL) flds->push_back(buf);
+    	count++;
+    }
+    return count;
+}
+
+struct SyntacticConstraint {
+	SyntacticConstraint(const string& constraints, int iLen):
+	len_(iLen) {
+		constraint_array_ = new char[ iLen * iLen ];
+		memset(constraint_array_, 0, iLen * iLen);
+		SetConstraints(constraints);
+                //PrintConstraints( );
+	}
+        ~SyntacticConstraint() {
+		delete [] constraint_array_;
+	}
+
+	char GetConstraint(int x, int y) {
+		assert(x < len_);
+		assert(y < len_);
+		return constraint_array_[GetArrayIndex(x, y)];
+	}
+
+	int inline GetArrayIndex(int x, int y) {
+		return x * len_ + y;
+	}
+	void SetConstraints(const string& constraints) {
+		vector<string> vec;
+		int count = split_string( constraints, ';', 1, &vec );
+		assert( count == len_ );
+		for (size_t i = 0; i < vec.size(); i++) {
+			constraint_array_[GetArrayIndex(i, i)] = 1; //[i,i] is always okay
+			vector<string> item;
+			split_string( vec[i], ',', 0, &item );
+			for (size_t j = 0; j < item.size(); j++) {
+				size_t t = item[j].find('-', 0);
+				if(t == string::npos) {
+					constraint_array_[GetArrayIndex(i, atoi(item[j].c_str()))] = 1;
+				}
+				else {
+					int start = atoi(item[j].substr(0, t).c_str());
+					int end = atoi(item[j].substr(t+1).c_str()) + 1;
+					for (int k = start; k < end; k++)
+						constraint_array_[GetArrayIndex(i, k)] = 1;
+				}
+			}
+		}
+	}
+private: 
+	void PrintConstraints( ) {
+		cerr << "\\\t";
+                for (size_t i = 0; i < len_; i++) {
+			cerr << i << "\t";
+		}
+		cerr << "\n";
+		for (size_t i = 0; i < len_; i++) {
+			cerr << i << "\t";
+                        for (size_t j = 0; j < len_; j++) {
+				cerr << constraint_array_[GetArrayIndex(i, j)] << "\t";
+			}
+                        cerr << "\n";
+		}
+        }
+private:
+	char* constraint_array_;
+	const int len_;
+};
+
 class ActiveChart;
 class PassiveChart {
- public:
-  PassiveChart(const string& goal,
-               const vector<GrammarPtr>& grammars,
-               const Lattice& input,
-               Hypergraph* forest);
-  ~PassiveChart();
+	public:
+		PassiveChart(const string& goal,
+				const vector<GrammarPtr>& grammars,
+				const Lattice& input,
+                                SentenceMetadata* smeta,
+				Hypergraph* forest);
+		~PassiveChart();
 
-  inline const vector<int>& operator()(int i, int j) const { return chart_(i,j); }
-  bool Parse();
-  inline int size() const { return chart_.width(); }
-  inline bool GoalFound() const { return goal_idx_ >= 0; }
-  inline int GetGoalIndex() const { return goal_idx_; }
+		inline const vector<int>& operator()(int i, int j) const { return chart_(i,j); }
+		bool Parse();
+		inline int size() const { return chart_.width(); }
+		inline bool GoalFound() const { return goal_idx_ >= 0; }
+		inline int GetGoalIndex() const { return goal_idx_; }
 
- private:
-  void ApplyRules(const int i,
-                  const int j,
-                  const RuleBin* rules,
-                  const Hypergraph::TailNodeVector& tail,
-                  const float lattice_cost);
+	private:
+		void ApplyRules(const int i,
+				const int j,
+				const RuleBin* rules,
+				const Hypergraph::TailNodeVector& tail,
+				const float lattice_cost);
 
-  void ApplyRule(const int i,
-                 const int j,
-                 const TRulePtr& r,
-                 const Hypergraph::TailNodeVector& ant_nodes,
-                 const float lattice_cost);
+		void ApplyRule(const int i,
+				const int j,
+				const TRulePtr& r,
+				const Hypergraph::TailNodeVector& ant_nodes,
+				const float lattice_cost);
 
-  void ApplyUnaryRules(const int i, const int j);
+		void ApplyUnaryRules(const int i, const int j);
 
-  const vector<GrammarPtr>& grammars_;
-  const Lattice& input_;
-  Hypergraph* forest_;
-  Array2D<vector<int> > chart_;   // chart_(i,j) is the list of nodes derived spanning i,j
-  typedef map<int, int> Cat2NodeMap;
-  Array2D<Cat2NodeMap> nodemap_;
-  vector<ActiveChart*> act_chart_;
-  const WordID goal_cat_;    // category that is being searched for at [0,n]
-  TRulePtr goal_rule_;
-  int goal_idx_;             // index of goal node, if found
-  const int lc_fid_;
+		const vector<GrammarPtr>& grammars_;
+		const Lattice& input_;
+		Hypergraph* forest_;
+                const SentenceMetadata* smeta_;
+		Array2D<vector<int> > chart_;   // chart_(i,j) is the list of nodes derived spanning i,j
+		typedef map<int, int> Cat2NodeMap;
+		Array2D<Cat2NodeMap> nodemap_;
+		vector<ActiveChart*> act_chart_;
+		const WordID goal_cat_;    // category that is being searched for at [0,n]
+		TRulePtr goal_rule_;
+		int goal_idx_;             // index of goal node, if found
+		const int lc_fid_;
 
-  static WordID kGOAL;       // [Goal]
+		static WordID kGOAL;       // [Goal]
 };
 
 WordID PassiveChart::kGOAL = 0;
 
 class ActiveChart {
- public:
-  ActiveChart(const Hypergraph* hg, const PassiveChart& psv_chart) :
-    hg_(hg),
-    act_chart_(psv_chart.size(), psv_chart.size()), psv_chart_(psv_chart) {}
+	public:
+		ActiveChart(const Hypergraph* hg, const PassiveChart& psv_chart) :
+			hg_(hg),
+			act_chart_(psv_chart.size(), psv_chart.size()), psv_chart_(psv_chart) {}
 
-  struct ActiveItem {
-    ActiveItem(const GrammarIter* g, const Hypergraph::TailNodeVector& a, float lcost) :
-      gptr_(g), ant_nodes_(a), lattice_cost(lcost) {}
-    explicit ActiveItem(const GrammarIter* g) :
-      gptr_(g), ant_nodes_(), lattice_cost(0.0) {}
+		struct ActiveItem {
+			ActiveItem(const GrammarIter* g, const Hypergraph::TailNodeVector& a, float lcost) :
+				gptr_(g), ant_nodes_(a), lattice_cost(lcost) {}
+			explicit ActiveItem(const GrammarIter* g) :
+				gptr_(g), ant_nodes_(), lattice_cost(0.0) {}
 
-    void ExtendTerminal(int symbol, float src_cost, vector<ActiveItem>* out_cell) const {
-      const GrammarIter* ni = gptr_->Extend(symbol);
-      if (ni) {
-        out_cell->push_back(ActiveItem(ni, ant_nodes_, lattice_cost + src_cost));
-      }
-    }
-    void ExtendNonTerminal(const Hypergraph* hg, int node_index, vector<ActiveItem>* out_cell) const {
-      int symbol = hg->nodes_[node_index].cat_;
-      const GrammarIter* ni = gptr_->Extend(symbol);
-      if (!ni) return;
-      Hypergraph::TailNodeVector na(ant_nodes_.size() + 1);
-      for (unsigned i = 0; i < ant_nodes_.size(); ++i)
-        na[i] = ant_nodes_[i];
-      na[ant_nodes_.size()] = node_index;
-      out_cell->push_back(ActiveItem(ni, na, lattice_cost));
-    }
+			void ExtendTerminal(int symbol, float src_cost, vector<ActiveItem>* out_cell) const {
+				const GrammarIter* ni = gptr_->Extend(symbol);
+				if (ni) {
+					out_cell->push_back(ActiveItem(ni, ant_nodes_, lattice_cost + src_cost));
+				}
+			}
+			void ExtendNonTerminal(const Hypergraph* hg, int node_index, vector<ActiveItem>* out_cell) const {
+				int symbol = hg->nodes_[node_index].cat_;
+				const GrammarIter* ni = gptr_->Extend(symbol);
+				if (!ni) return;
+				Hypergraph::TailNodeVector na(ant_nodes_.size() + 1);
+				for (unsigned i = 0; i < ant_nodes_.size(); ++i)
+					na[i] = ant_nodes_[i];
+				na[ant_nodes_.size()] = node_index;
+				out_cell->push_back(ActiveItem(ni, na, lattice_cost));
+			}
 
-    const GrammarIter* gptr_;
-    Hypergraph::TailNodeVector ant_nodes_;
-    float lattice_cost;  // TODO? use SparseVector<double>
-  };
+			const GrammarIter* gptr_;
+			Hypergraph::TailNodeVector ant_nodes_;
+			float lattice_cost;  // TODO? use SparseVector<double>
+		};
 
-  inline const vector<ActiveItem>& operator()(int i, int j) const { return act_chart_(i,j); }
-  void SeedActiveChart(const Grammar& g) {
-    int size = act_chart_.width();
-    for (int i = 0; i < size; ++i)
-      if (g.HasRuleForSpan(i,i,0))
-        act_chart_(i,i).push_back(ActiveItem(g.GetRoot()));
-  }
+		inline const vector<ActiveItem>& operator()(int i, int j) const { return act_chart_(i,j); }
+		void SeedActiveChart(const Grammar& g) {
+			int size = act_chart_.width();
+			for (int i = 0; i < size; ++i)
+				if (g.HasRuleForSpan(i,i,0))
+					act_chart_(i,i).push_back(ActiveItem(g.GetRoot()));
+		}
 
-  void ExtendActiveItems(int i, int k, int j) {
-    //cerr << "  LOOK(" << i << "," << k << ") for completed items in (" << k << "," << j << ")\n";
-    vector<ActiveItem>& cell = act_chart_(i,j);
-    const vector<ActiveItem>& icell = act_chart_(i,k);
-    const vector<int>& idxs = psv_chart_(k, j);
-    //if (!idxs.empty()) { cerr << "FOUND IN (" << k << "," << j << ")\n"; }
-    for (vector<ActiveItem>::const_iterator di = icell.begin(); di != icell.end(); ++di) {
-      for (vector<int>::const_iterator ni = idxs.begin(); ni != idxs.end(); ++ni) {
-         di->ExtendNonTerminal(hg_, *ni, &cell);
+		void ExtendActiveItems(int i, int k, int j) {
+			//cerr << "  LOOK(" << i << "," << k << ") for completed items in (" << k << "," << j << ")\n";
+			vector<ActiveItem>& cell = act_chart_(i,j);
+			const vector<ActiveItem>& icell = act_chart_(i,k);
+			const vector<int>& idxs = psv_chart_(k, j);
+			//if (!idxs.empty()) { cerr << "FOUND IN (" << k << "," << j << ")\n"; }
+			for (vector<ActiveItem>::const_iterator di = icell.begin(); di != icell.end(); ++di) {
+				for (vector<int>::const_iterator ni = idxs.begin(); ni != idxs.end(); ++ni) {
+					di->ExtendNonTerminal(hg_, *ni, &cell);
       }
     }
   }
@@ -143,9 +237,11 @@ class ActiveChart {
 PassiveChart::PassiveChart(const string& goal,
                            const vector<GrammarPtr>& grammars,
                            const Lattice& input,
+                           SentenceMetadata* smeta,
                            Hypergraph* forest) :
     grammars_(grammars),
     input_(input),
+    smeta_(smeta),
     forest_(forest),
     chart_(input.size()+1, input.size()+1),
     nodemap_(input.size()+1, input.size()+1),
@@ -227,6 +323,20 @@ bool PassiveChart::Parse() {
   for (unsigned gi = 0; gi < grammars_.size(); ++gi)
     act_chart_[gi]->SeedActiveChart(*grammars_[gi]);
 
+  //added by lijunhui, handling constraints
+  string constraints = "";
+  SyntacticConstraint *syn_constraint = NULL;
+  if ( smeta_ != NULL ) {
+	  constraints = smeta_->GetSGMLValue(string("constraints"));
+	  if (constraints == string("")) {
+		  //no constraints
+		  syn_constraint = NULL;
+	  }
+	  else {
+		  syn_constraint = new SyntacticConstraint(constraints, smeta_->GetSourceLength());
+	  }
+  }
+
   if (!SILENT) cerr << "    ";
   for (unsigned l=1; l<input_.size()+1; ++l) {
     if (!SILENT) cerr << '.';
@@ -242,6 +352,17 @@ bool PassiveChart::Parse() {
                ai != cell.end(); ++ai) {
             const RuleBin* rules = (ai->gptr_->GetRules());
             if (!rules) continue;
+            
+            //added by lijunhui, push the constraints
+            if (syn_constraint != NULL && grammars_[gi]->GetGrammarName() == smeta_->GetSGMLValue(string("grammar"))) {
+        	if (syn_constraint->GetConstraint(i, j-1) == 0)
+        		continue;
+            }
+            if (syn_constraint != NULL && grammars_[gi]->GetGrammarName() == "ReorderableSyntacticConstrainedGrammar") {
+              if (syn_constraint->GetConstraint(i, j-1) == 0)
+                continue;
+            }
+
             ApplyRules(i, j, rules, ai->ant_nodes_, ai->lattice_cost);
           }
         }
@@ -265,6 +386,7 @@ bool PassiveChart::Parse() {
     }
   }
   if (!SILENT) cerr << endl;
+  if (syn_constraint != NULL) delete syn_constraint;
 
   if (GoalFound())
     forest_->PruneUnreachable(forest_->nodes_.size() - 1);
@@ -283,8 +405,9 @@ ExhaustiveBottomUpParser::ExhaustiveBottomUpParser(
   grammars_(grammars) {}
 
 bool ExhaustiveBottomUpParser::Parse(const Lattice& input,
+                                     SentenceMetadata* smeta,
                                      Hypergraph* forest) const {
-  PassiveChart chart(goal_sym_, grammars_, input, forest);
+  PassiveChart chart(goal_sym_, grammars_, input, smeta, forest);
   const bool result = chart.Parse();
   return result;
 }

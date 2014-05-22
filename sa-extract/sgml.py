@@ -127,6 +127,7 @@ def process_sgml_line(line, id=None):
     p.feed(line)
     p.close()
     sent = Sentence(p.words, p.meta)
+    
     return sent
 
 class DatasetParser(sgmllib.SGMLParser):

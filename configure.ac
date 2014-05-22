@@ -208,5 +208,9 @@ AC_CONFIG_FILES([training/Makefile])
 AC_CONFIG_FILES([training/utils/Makefile])
 AC_CONFIG_FILES([mira-vlad/Makefile])
 
+#feature stuff
+AC_CONFIG_FILES([synutils/maxent-3.0/Makefile])
+AC_CONFIG_FILES([synutils/Makefile])
+
 AC_OUTPUT
 

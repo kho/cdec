@@ -993,11 +993,11 @@ int main(int argc, char** argv) {
 			    temp_lambdas += (cur_constraint[u]->oracleN->features-cur_constraint[u]->features) * cur_constraint[u]->alpha * step_size;
 			    alpha_sum += cur_constraint[u]->alpha;
 			  }
-			cerr << "Alpha sum " << alpha_sum << " " << temp_lambdas << endl;
+			//cerr << "Alpha sum " << alpha_sum << " " << temp_lambdas << endl;
 						
 			lambdas += (cur_pair[1]->features) * step_size;
 			lambdas -= (cur_pair[0]->features) * step_size;
-			cerr << " Lambdas " << lambdas << endl;
+			//cerr << " Lambdas " << lambdas << endl;
 			//reload weights based on update
 			dense_weights.clear();
 			//weights.InitFromVector(lambdas);

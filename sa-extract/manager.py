@@ -1,5 +1,7 @@
 import csuf
 import cdat
+import csyncon
+import csynctx
 
 class Sampler(object):
 	'''A Sampler implements a logic for choosing
@@ -64,13 +66,24 @@ class RuleFactory(object):
 
 class ContextManager(object):
 
-	def __init__(self, ffile, efile, extractor=None, sampler=None, rulefactory=None, from_binary=False):
+	def __init__(self, ffile, efile, syn_con_file=None, syn_ctx_file=None, extractor=None, sampler=None, rulefactory=None, from_binary=False):
 		# NOTE: Extractor does not have a default value because
 		# the only nontrivial extractor right now depends on an
 		# alignment file
 
 		self.fsarray = csuf.SuffixArray(ffile, from_binary)
 		self.edarray = cdat.DataArray(efile, from_binary)
+		
+		if syn_con_file == None or cmp(syn_con_file, "None") == 0:
+		  self.syncon = None
+		else: 
+		  self.syncon = csyncon.SyntacticContraint(syn_con_file)
+		
+		if syn_ctx_file == None or cmp(syn_ctx_file, "None") == 0:
+		  self.synctx = None
+		else:
+		  self.synctx = csynctx.SyntacticContext(syn_ctx_file, from_binary)
+		
 
 		self.factory = rulefactory
 		self.factory.registerContext(self)
@@ -90,11 +103,11 @@ class ContextManager(object):
 		return model_id
 
 
-	def input(self, model, fwords, meta):
+	def input(self, model, fwords, meta, fsc):
 		if model != self.owner:
 			return
 		self.fwords = fwords
-		self.factory.input(self.fwords, meta)
+		self.factory.input(self.fwords, meta, fsc)
 
 
 

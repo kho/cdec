@@ -6,6 +6,7 @@
 
 #include "lattice.h"
 #include "grammar.h"
+#include "sentence_metadata.h"
 
 class Hypergraph;
 
@@ -17,6 +18,7 @@ class ExhaustiveBottomUpParser {
   // returns true if goal reached spanning the full input
   // forest contains the full (i.e., unpruned) parse forest
   bool Parse(const Lattice& input,
+             SentenceMetadata* smeta,
              Hypergraph* forest) const;
 
  private:

@@ -17,9 +17,9 @@ trule_test_SOURCES = trule_test.cc
 trule_test_LDADD = $(BOOST_UNIT_TEST_FRAMEWORK_LDFLAGS) $(BOOST_UNIT_TEST_FRAMEWORK_LIBS) libcdec.a ../mteval/libmteval.a ../utils/libutils.a
 
 cdec_SOURCES = cdec.cc
-cdec_LDADD = libcdec.a ../mteval/libmteval.a ../utils/libutils.a ../klm/search/libksearch.a ../klm/lm/libklm.a ../klm/util/libklm_util.a ../klm/util/double-conversion/libklm_util_double.a
+cdec_LDADD = libcdec.a ../mteval/libmteval.a ../utils/libutils.a ../klm/search/libksearch.a ../klm/lm/libklm.a ../klm/util/libklm_util.a ../klm/util/double-conversion/libklm_util_double.a ../synutils/maxent-3.0/libtsuruoka_maxent.a -lgfortran
 
-AM_CPPFLAGS = -DTEST_DATA=\"$(top_srcdir)/decoder/test_data\" -DBOOST_TEST_DYN_LINK -W -Wno-sign-compare -I$(top_srcdir) -I$(top_srcdir)/mteval -I$(top_srcdir)/utils -I$(top_srcdir)/klm
+AM_CPPFLAGS = -DTEST_DATA=\"$(top_srcdir)/decoder/test_data\" -DBOOST_TEST_DYN_LINK -W -Wno-sign-compare -I$(top_srcdir) -I$(top_srcdir)/mteval -I$(top_srcdir)/utils -I$(top_srcdir)/klm -I$(top_srcdir)/synutils
 
 rule_lexer.cc: rule_lexer.ll
 	$(LEX) -s -CF -8 -o$@ $<
@@ -63,6 +63,8 @@ libcdec_a_SOURCES = \
   ff_sample_fsa.h \
   ff_source_path.h \
   ff_source_syntax.h \
+  ff_const_reorder.h \
+  ff_soft_syn.h \
   ff_spans.h \
   ff_tagger.h \
   ff_wordalign.h \
@@ -147,6 +149,8 @@ libcdec_a_SOURCES = \
   ff_source_syntax.cc \
   ff_bleu.cc \
   ff_factory.cc \
+  ff_const_reorder.cc \
+  ff_soft_syn.cc \
   incremental.cc \
   lexalign.cc \
   lextrans.cc \

@@ -283,7 +283,11 @@ for (my $opt_iter=0; $opt_iter<$max_iterations; $opt_iter++) {
 	    $pcmd = "cat $srcFile | $local_server $usefork -p $pmem -e $logdir -n $decode_nodes --";
 	}
 	else {
-	    $pcmd = "cat $srcFile | $parallelize $usefork -p $pmem -e $logdir -j $decode_nodes --baseport $portn --";
+            if ($usefork) {
+	      $pcmd = "cat $srcFile | $parallelize --use-fork -p $pmem -e $logdir -j $decode_nodes --baseport $portn --";
+            } else {
+              $pcmd = "cat $srcFile | $parallelize $usefork -p $pmem -e $logdir -j $decode_nodes --baseport $portn --";
+            }
 	}
 	my $cmd = "$pcmd $decoder_cmd 2> $decoderLog 1> $runFile";
 	print STDERR "COMMAND:\n$cmd\n";
