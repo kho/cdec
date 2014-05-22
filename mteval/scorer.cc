@@ -22,7 +22,7 @@
 using boost::shared_ptr;
 using namespace std;
 
-void Score::TimesEquals(float scale) {
+void Score::TimesEquals(float /*scale*/) {
   cerr<<"UNIMPLEMENTED except for BLEU (for MIRA): Score::TimesEquals"<<endl;abort();
 }
 
@@ -88,7 +88,6 @@ class SERScore : public ScoreBase<SERScore> {
  public:
   SERScore() : correct(0), total(0) {}
   float ComputePartialScore() const { return 0.0;}
-  float ComputeSentScore() const {return 0.0;}
   float ComputeScore() const {
     return static_cast<float>(correct) / static_cast<float>(total);
   }
@@ -158,7 +157,6 @@ class BLEUScore : public ScoreBase<BLEUScore> {
     ref_len = k;
     hyp_len = k; }
   float ComputeScore() const;
-  float ComputeSentScore() const;
   float ComputePartialScore() const;
   void ScoreDetails(string* details) const;
   void TimesEquals(float scale);
@@ -181,7 +179,6 @@ class BLEUScore : public ScoreBase<BLEUScore> {
     return hyp_ngram_counts.size();
   }
   float ComputeScore(vector<float>* precs, float* bp) const;
-  float ComputeSentScore(vector<float>* precs, float* bp) const;
   float ComputePartialScore(vector<float>* prec, float* bp) const;
   valarray<float> correct_ngram_hit_counts;
   valarray<float> hyp_ngram_counts;
@@ -201,7 +198,7 @@ class BLEUScorerBase : public SentenceScorer {
   virtual float ComputeRefLength(const vector<WordID>& hyp) const = 0;
  private:
   struct NGramCompare {
-    int operator() (const vector<WordID>& a, const vector<WordID>& b) {
+    int operator() (const vector<WordID>& a, const vector<WordID>& b) const {
       size_t as = a.size();
       size_t bs = b.size();
       const size_t s = (as < bs ? as : bs);
@@ -433,7 +430,7 @@ float BLEUScore::ComputeScore(vector<float>* precs, float* bp) const {
   float log_bleu = 0;
   if (precs) precs->clear();
   int count = 0;
-
+  vector<float> total_precs(N());
   for (int i = 0; i < N(); ++i) {
     if (hyp_ngram_counts[i] > 0) {
       float cor_count = correct_ngram_hit_counts[i];
@@ -444,53 +441,22 @@ float BLEUScore::ComputeScore(vector<float>* precs, float* bp) const {
       log_bleu += lprec;
       ++count;
     }
-
+    total_precs[i] = log_bleu;
   }
-  log_bleu /= static_cast<float>(count);
+  vector<float> bleus(N());
   float lbp = 0.0;
   if (hyp_len < ref_len)
     lbp = (hyp_len - ref_len) / hyp_len;
   log_bleu += lbp;
   if (bp) *bp = exp(lbp);
-  return exp(log_bleu);
-}
-
-
-float BLEUScore::ComputeSentScore(vector<float>* precs, float* bp) const {
-  bool DEBUG_SCORE = false;
-  float log_bleu = 0;
-  if (precs) precs->clear();
-  int count = 4;
-  float lprec=0;
-  float smooth_factor=1.0;
-
-  for (int i = 0; i < hyp_ngram_counts.size(); ++i) {
-
-    if(hyp_ngram_counts[i] > 0)
-      {
-	if (correct_ngram_hit_counts[i] > 0) {
-          lprec = log(correct_ngram_hit_counts[i]) - log(hyp_ngram_counts[i]);}
-        else
-	  {
-	    smooth_factor *= 0.5;
-	    lprec = log(smooth_factor) - log(hyp_ngram_counts[i]);
-	  }
-        if (precs) precs->push_back(exp(lprec));
-        log_bleu += lprec;
-	//      ++count;
-      }
+  float wb = 0;
+  for (int i = 0; i < N(); ++i) {
+    bleus[i] = exp(total_precs[i] / (i+1) + lbp);
+    wb += bleus[i] / pow(2.0, 4.0 - i);
   }
-
-
-  log_bleu /= static_cast<float>(count);
-  float lbp = 0.0;
-  if (hyp_len < ref_len)
-    lbp = (hyp_len - ref_len) / hyp_len;
-  log_bleu += lbp;
-  if (bp) *bp = exp(lbp);
-  return exp(log_bleu);
+  //return wb;
+  return bleus.back();
 }
-
 
 
 //comptue scaled score for oracle retrieval
@@ -524,10 +490,6 @@ float BLEUScore::ComputePartialScore() const {
 
 float BLEUScore::ComputeScore() const {
   return ComputeScore(NULL, NULL);
-}
-
-float BLEUScore::ComputeSentScore() const {
-  return ComputeSentScore(NULL,NULL);
 }
 
 void BLEUScore::Subtract(const Score& rhs, Score* res) const {
@@ -632,26 +594,29 @@ void DocScorer::Init(
       const ScoreType type,
       const vector<string>& ref_files,
       const string& src_file, bool verbose) {
+  cerr << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+          "!!! This code is using the deprecated DocScorer interface, please fix !!!\n"
+          "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n";
   scorers_.clear();
-  // TODO stop using valarray, start using ReadFile
+  static const WordID kDIV = TD::Convert("|||");
   cerr << "Loading references (" << ref_files.size() << " files)\n";
   ReadFile srcrf;
   if (type == AER && src_file.size() > 0) {
     cerr << "  (source=" << src_file << ")\n";
     srcrf.Init(src_file);
   }
+  std::vector<WordID> tmp;
   std::vector<ReadFile> ifs(ref_files.begin(),ref_files.end());
   for (int i=0; i < ref_files.size(); ++i) ifs[i].Init(ref_files[i]);
   char buf[64000];
   bool expect_eof = false;
   int line=0;
   while (ifs[0].get()) {
-    vector<vector<WordID> > refs(ref_files.size());
+    vector<vector<WordID> > refs;
     for (int i=0; i < ref_files.size(); ++i) {
       istream &in=ifs[i].get();
       if (in.eof()) break;
       in.getline(buf, 64000);
-      refs[i].clear();
       if (strlen(buf) == 0) {
         if (in.eof()) {
           if (!expect_eof) {
@@ -660,9 +625,17 @@ void DocScorer::Init(
           }
           break;
         }
-      } else {
-        TD::ConvertSentence(buf, &refs[i]);
-        assert(!refs[i].empty());
+      } else { // process reference
+        tmp.clear();
+        TD::ConvertSentence(buf, &tmp);
+        unsigned last = 0;
+        for (unsigned j = 0; j < tmp.size(); ++j) {
+          if (tmp[j] == kDIV) {
+            refs.push_back(vector<WordID>(tmp.begin() + last, tmp.begin() + j));
+            last = j + 1;
+          }
+        }
+        refs.push_back(vector<WordID>(tmp.begin() + last, tmp.end()));
       }
       assert(!expect_eof);
     }
@@ -682,3 +655,27 @@ void DocScorer::Init(
   cerr << "Loaded reference translations for " << scorers_.size() << " sentences.\n";
 }
 
+DocStreamScorer::~DocStreamScorer() {
+}
+
+void DocStreamScorer::Init(
+      const ScoreType type,
+      const vector<string>& ref_files,
+      const string& src_file, bool verbose) {
+  scorers_.clear();
+  // AER not supported in stream mode
+  assert(type != AER);
+  this->type = type;
+  vector<vector<WordID> > refs(1);
+  string src_line;
+  // Initialize empty reference
+  TD::ConvertSentence("", &refs[0]);
+  scorer = ScorerP(SentenceScorer::CreateSentenceScorer(type, refs, src_line));
+}
+
+void DocStreamScorer::update(const std::string& ref) {
+	vector<vector<WordID> > refs(1);
+	string src_line;
+	TD::ConvertSentence(ref, &refs[0]);
+	scorer = ScorerP(SentenceScorer::CreateSentenceScorer(type, refs, src_line));
+}

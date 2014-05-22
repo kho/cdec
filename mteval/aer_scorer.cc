@@ -5,7 +5,6 @@
 #include <sstream>
 
 #include "tdict.h"
-// #include "alignment_pharaoh.h"
 #include "alignment_io.h"
 
 using namespace std;
@@ -51,8 +50,6 @@ class AERScore : public ScoreBase<AERScore> {
     return static_cast<float>(num_matches) / num_in_ref;
   }
   float ComputePartialScore() const { return 0.0;}
- float ComputeSentScore() const {return 0.0;}
-
   virtual float ComputeScore() const {
     const float prec = Precision();
     const float rec = Recall();

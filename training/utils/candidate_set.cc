@@ -1,6 +1,11 @@
 #include "candidate_set.h"
 
-#include <tr1/unordered_set>
+#ifndef HAVE_OLD_CPP
+# include <unordered_set>
+#else
+# include <tr1/unordered_set>
+namespace std { using std::tr1::unordered_set; }
+#endif
 
 #include <boost/functional/hash.hpp>
 
@@ -139,12 +144,12 @@ void CandidateSet::ReadFromFile(const string& file) {
 
 void CandidateSet::Dedup() {
   if(!SILENT) cerr << "Dedup in=" << cs.size();
-  tr1::unordered_set<Candidate, CandidateHasher, CandidateCompare> u;
+  unordered_set<Candidate, CandidateHasher, CandidateCompare> u;
   while(cs.size() > 0) {
     u.insert(cs.back());
     cs.pop_back();
   }
-  tr1::unordered_set<Candidate, CandidateHasher, CandidateCompare>::iterator it = u.begin();
+  unordered_set<Candidate, CandidateHasher, CandidateCompare>::iterator it = u.begin();
   while (it != u.end()) {
     cs.push_back(*it);
     it = u.erase(it);
@@ -157,6 +162,21 @@ void CandidateSet::AddKBestCandidates(const Hypergraph& hg, size_t kbest_size, c
 
   for (unsigned i = 0; i < kbest_size; ++i) {
     const KBest::KBestDerivations<vector<WordID>, ESentenceTraversal>::Derivation* d =
+      kbest.LazyKthBest(hg.nodes_.size() - 1, i);
+    if (!d) break;
+    cs.push_back(Candidate(d->yield, d->feature_values));
+    if (scorer)
+      scorer->Evaluate(d->yield, &cs.back().eval_feats);
+  }
+  Dedup();
+}
+
+void CandidateSet::AddUniqueKBestCandidates(const Hypergraph& hg, size_t kbest_size, const SegmentEvaluator* scorer) {
+  typedef KBest::KBestDerivations<vector<WordID>, ESentenceTraversal, KBest::FilterUnique> K;
+  K kbest(hg, kbest_size);
+
+  for (unsigned i = 0; i < kbest_size; ++i) {
+    const K::Derivation* d =
       kbest.LazyKthBest(hg.nodes_.size() - 1, i);
     if (!d) break;
     cs.push_back(Candidate(d->yield, d->feature_values));

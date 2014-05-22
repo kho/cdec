@@ -1,4 +1,5 @@
-AC_INIT([cdec],[2013-03-08])
+AC_CONFIG_MACRO_DIR([m4])
+AC_INIT([cdec],[2014-01-28])
 AC_CONFIG_SRCDIR([decoder/cdec.cc])
 AM_INIT_AUTOMAKE
 AC_CONFIG_HEADERS(config.h)
@@ -7,10 +8,11 @@ AC_PROG_LEX
 case $LEX in
 :) AC_MSG_ERROR([No lex (Flex, lex, etc.) program found]);;
 esac
-# CPPFLAGS="$CPPFLAGS -std=c++0x"
+OLD_CXXFLAGS=$CXXFLAGS
 AC_PROG_CC
 AC_PROG_CXX
-AX_CXX_COMPILE_STDCXX_11
+CXXFLAGS=$OLD_CXXFLAGS
+AX_CXX_COMPILE_STDCXX_11([],[mandatory])
 AC_LANG_CPLUSPLUS
 AC_OPENMP
 BOOST_REQUIRE([1.44])
@@ -22,6 +24,7 @@ BOOST_TEST
 BOOST_THREADS
 AM_PATH_PYTHON
 AC_CHECK_HEADER(dlfcn.h,AC_DEFINE(HAVE_DLFCN_H))
+AC_CHECK_LIB(rt, clock_gettime)
 AC_CHECK_LIB(dl, dlopen)
 AC_CHECK_HEADERS(zlib.h,
     AC_CHECK_LIB(z, gzread,[
@@ -185,7 +188,13 @@ AC_CHECK_HEADER(google/dense_hash_map,
 
 AC_PROG_INSTALL
 
-CPPFLAGS="-DPIC -fPIC $CPPFLAGS -DHAVE_CONFIG_H -DKENLM_MAX_ORDER=6"
+CPPFLAGS="-DPIC $CPPFLAGS -DHAVE_CONFIG_H -DKENLM_MAX_ORDER=6"
+CXXFLAGS="$CXX11_SWITCH $CXXFLAGS -fPIC -g -O3"
+CFLAGS="$CFLAGS -fPIC -g -O3"
+
+if test "x$HAVE_CXX11" = "x0"; then
+  CPPFLAGS="$CPPFLAGS -DHAVE_OLD_CPP"
+fi
 
 # core cdec stuff
 AC_CONFIG_FILES([Makefile])
@@ -193,6 +202,8 @@ AC_CONFIG_FILES([utils/Makefile])
 AC_CONFIG_FILES([mteval/Makefile])
 AC_CONFIG_FILES([mteval/meteor_jar.cc])
 AC_CONFIG_FILES([decoder/Makefile])
+AC_CONFIG_FILES([python/setup.py])
+AC_CONFIG_FILES([extractor/Makefile])
 AC_CONFIG_FILES([word-aligner/Makefile])
 
 # KenLM stuff
@@ -206,11 +217,9 @@ AC_CONFIG_FILES([klm/lm/builder/Makefile])
 # training stuff
 AC_CONFIG_FILES([training/Makefile])
 AC_CONFIG_FILES([training/utils/Makefile])
-AC_CONFIG_FILES([mira-vlad/Makefile])
 
 #feature stuff
 AC_CONFIG_FILES([synutils/maxent-3.0/Makefile])
 AC_CONFIG_FILES([synutils/Makefile])
 
 AC_OUTPUT
-

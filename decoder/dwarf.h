@@ -11,11 +11,9 @@
 #include "trule.h"
 #include "tdict.h"
 #include <boost/functional/hash.hpp>
-#include <tr1/unordered_map>
 #include <boost/tuple/tuple.hpp>
 
 using namespace std;
-using namespace std::tr1;
 using namespace boost::tuples;
 using namespace boost;
 

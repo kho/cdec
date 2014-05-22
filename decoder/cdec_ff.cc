@@ -14,8 +14,12 @@
 #include "ff_rules.h"
 #include "ff_ruleshape.h"
 #include "ff_bleu.h"
+#include "ff_soft_syntax.h"
+#include "ff_soft_syntax_mindist.h"
 #include "ff_source_path.h"
+#include "ff_parse_match.h"
 #include "ff_source_syntax.h"
+#include "ff_source_syntax2.h"
 #include "ff_register.h"
 #include "ff_charset.h"
 #include "ff_wordset.h"
@@ -25,9 +29,6 @@
 #include "ff_const_reorder.h"
 #include "ff_soft_syn.h"
 
-#ifdef HAVE_GLC
-#include <cdec/ff_glc.h>
-#endif
 
 void register_feature_functions() {
   static bool registered = false;
@@ -45,21 +46,24 @@ void register_feature_functions() {
   RegisterFF<Discourse>();
 
   //TODO: use for all features the new Register which requires static FF::usage(false,false) give name
-#ifdef HAVE_RANDLM
-  ff_registry.Register("RandLM", new FFFactory<LanguageModelRandLM>);
-#endif
   ff_registry.Register("SpanFeatures", new FFFactory<SpanFeatures>());
   ff_registry.Register("NgramFeatures", new FFFactory<NgramDetector>());
   ff_registry.Register("RuleContextFeatures", new FFFactory<RuleContextFeatures>());
   ff_registry.Register("RuleIdentityFeatures", new FFFactory<RuleIdentityFeatures>());
+  ff_registry.Register("RuleWordAlignmentFeatures", new FFFactory<RuleWordAlignmentFeatures>());
+  ff_registry.Register("ParseMatchFeatures", new FFFactory<ParseMatchFeatures>);
+  ff_registry.Register("SoftSyntaxFeatures", new FFFactory<SoftSyntaxFeatures>);
+  ff_registry.Register("SoftSyntaxFeaturesMindist", new FFFactory<SoftSyntaxFeaturesMindist>);
   ff_registry.Register("SourceSyntaxFeatures", new FFFactory<SourceSyntaxFeatures>);
   ff_registry.Register("SourceSpanSizeFeatures", new FFFactory<SourceSpanSizeFeatures>);
+  ff_registry.Register("SourceSyntaxFeatures2", new FFFactory<SourceSyntaxFeatures2>);
   ff_registry.Register("CMR2008ReorderingFeatures", new FFFactory<CMR2008ReorderingFeatures>());
   ff_registry.Register("RuleSourceBigramFeatures", new FFFactory<RuleSourceBigramFeatures>());
   ff_registry.Register("RuleTargetBigramFeatures", new FFFactory<RuleTargetBigramFeatures>());
   ff_registry.Register("KLanguageModel", new KLanguageModelFactory());
   ff_registry.Register("NonLatinCount", new FFFactory<NonLatinCount>);
   ff_registry.Register("RuleShape", new FFFactory<RuleShapeFeatures>);
+  ff_registry.Register("RuleShape2", new FFFactory<RuleShapeFeatures2>);
   ff_registry.Register("RelativeSentencePosition", new FFFactory<RelativeSentencePosition>);
   ff_registry.Register("LexNullJump", new FFFactory<LexNullJump>);
   ff_registry.Register("NewJump", new FFFactory<NewJump>);

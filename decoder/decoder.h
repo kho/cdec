@@ -26,9 +26,10 @@ private:
 
 class SentenceMetadata;
 class Hypergraph;
-struct DecoderImpl;
+class DecoderImpl;
 
-struct DecoderObserver {
+class DecoderObserver {
+ public:
   virtual ~DecoderObserver();
   virtual void NotifyDecodingStart(const SentenceMetadata& smeta);
   virtual void NotifySourceParseFailure(const SentenceMetadata& smeta);
@@ -38,9 +39,10 @@ struct DecoderObserver {
   virtual void NotifyDecodingComplete(const SentenceMetadata& smeta);
 };
 
-struct Grammar;  // TODO once the decoder interface is cleaned up,
-                 // this should be somewhere else
-struct Decoder {
+class Grammar;  // TODO once the decoder interface is cleaned up,
+                // this should be somewhere else
+class Decoder {
+ public:
   Decoder(int argc, char** argv);
   Decoder(std::istream* config_file);
   bool Decode(const std::string& input, DecoderObserver* observer = NULL);
@@ -58,6 +60,7 @@ struct Decoder {
     void SetRuleFile(std::string f);
     //END @author ferhanture
     
+  // this sets the current sentence ID
   void SetId(int id);
   ~Decoder();
   const boost::program_options::variables_map& GetConf() const { return conf; }

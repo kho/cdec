@@ -600,7 +600,7 @@ private:
 		SParsedTree *tree;
 		while ((tree = reader->fnReadNextParseTreeWithProb(&prob)) != NULL) {
 			vec_tree.push_back(tree);
-			if(isinf(prob)) {
+			if(std::isinf(prob)) {
 				vec_prob.push_back(-99);
 				break;
 			}

@@ -1,9 +1,7 @@
 #ifndef _DTRAIN_SCORE_H_
 #define _DTRAIN_SCORE_H_
 
-#include "kbestget.h"
-
-using namespace std;
+#include "dtrain.h"
 
 namespace dtrain
 {
@@ -140,37 +138,44 @@ make_ngram_counts(const vector<WordID>& hyp, const vector<WordID>& ref, const un
 struct BleuScorer : public LocalScorer
 {
   score_t Bleu(NgramCounts& counts, const unsigned hyp_len, const unsigned ref_len);
-  score_t Score(vector<WordID>& hyp, vector<WordID>& ref, const unsigned /*rank*/, const unsigned /*src_len*/);
+  score_t Score(const vector<WordID>& hyp, const vector<WordID>& ref, const unsigned /*rank*/, const unsigned /*src_len*/);
+  void Reset() {}
 };
 
 struct StupidBleuScorer : public LocalScorer
 {
-  score_t Score(vector<WordID>& hyp, vector<WordID>& ref, const unsigned /*rank*/, const unsigned /*src_len*/);
+  score_t Score(const vector<WordID>& hyp, const vector<WordID>& ref, const unsigned /*rank*/, const unsigned /*src_len*/);
+  void Reset() {}
 };
 
 struct FixedStupidBleuScorer : public LocalScorer
 {
-  score_t Score(vector<WordID>& hyp, vector<WordID>& ref, const unsigned /*rank*/, const unsigned /*src_len*/);
+  score_t Score(const vector<WordID>& hyp, const vector<WordID>& ref, const unsigned /*rank*/, const unsigned /*src_len*/);
+  void Reset() {}
 };
 
 struct SmoothBleuScorer : public LocalScorer
 {
-  score_t Score(vector<WordID>& hyp, vector<WordID>& ref, const unsigned /*rank*/, const unsigned /*src_len*/);
+  score_t Score(const vector<WordID>& hyp, const vector<WordID>& ref, const unsigned /*rank*/, const unsigned /*src_len*/);
+  void Reset() {}
 };
 
 struct SumBleuScorer : public LocalScorer
 {
-   score_t Score(vector<WordID>& hyp, vector<WordID>& ref, const unsigned /*rank*/, const unsigned /*src_len*/);
+  score_t Score(const vector<WordID>& hyp, const vector<WordID>& ref, const unsigned /*rank*/, const unsigned /*src_len*/);
+  void Reset() {}
 };
 
 struct SumExpBleuScorer : public LocalScorer
 {
-   score_t Score(vector<WordID>& hyp, vector<WordID>& ref, const unsigned /*rank*/, const unsigned /*src_len*/);
+  score_t Score(const vector<WordID>& hyp, const vector<WordID>& ref, const unsigned /*rank*/, const unsigned /*src_len*/);
+  void Reset() {}
 };
 
 struct SumWhateverBleuScorer : public LocalScorer
 {
-   score_t Score(vector<WordID>& hyp, vector<WordID>& ref, const unsigned /*rank*/, const unsigned /*src_len*/);
+  score_t Score(const vector<WordID>& hyp, const vector<WordID>& ref, const unsigned /*rank*/, const unsigned /*src_len*/);
+  void Reset() {};
 };
 
 struct ApproxBleuScorer : public BleuScorer
@@ -189,7 +194,7 @@ struct ApproxBleuScorer : public BleuScorer
     glob_hyp_len_ = glob_ref_len_ = glob_src_len_ = 0.;
   }
 
-  score_t Score(vector<WordID>& hyp, vector<WordID>& ref, const unsigned rank, const unsigned src_len);
+  score_t Score(const vector<WordID>& hyp, const vector<WordID>& ref, const unsigned rank, const unsigned src_len);
 };
 
 struct LinearBleuScorer : public BleuScorer
@@ -202,7 +207,7 @@ struct LinearBleuScorer : public BleuScorer
     onebest_counts_.One();
   }
 
-  score_t Score(vector<WordID>& hyp, vector<WordID>& ref, const unsigned rank, const unsigned /*src_len*/);
+  score_t Score(const vector<WordID>& hyp, const vector<WordID>& ref, const unsigned rank, const unsigned /*src_len*/);
 
   inline void Reset() {
     onebest_len_ = 1;

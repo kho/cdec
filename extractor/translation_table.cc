@@ -90,37 +90,40 @@ void TranslationTable::IncrementLinksCount(
 
 double TranslationTable::GetTargetGivenSourceScore(
     const string& source_word, const string& target_word) {
-  if (!source_data_array->HasWord(source_word) ||
-      !target_data_array->HasWord(target_word)) {
+  int source_id = source_data_array->GetWordId(source_word);
+  int target_id = target_data_array->GetWordId(target_word);
+  if (source_id == -1 || target_id == -1) {
     return -1;
   }
 
-  int source_id = source_data_array->GetWordId(source_word);
-  int target_id = target_data_array->GetWordId(target_word);
-  return translation_probabilities[make_pair(source_id, target_id)].first;
+  auto entry = make_pair(source_id, target_id);
+  auto it = translation_probabilities.find(entry);
+  if (it == translation_probabilities.end()) {
+    return 0;
+  }
+  return it->second.first;
 }
 
 double TranslationTable::GetSourceGivenTargetScore(
     const string& source_word, const string& target_word) {
-  if (!source_data_array->HasWord(source_word) ||
-      !target_data_array->HasWord(target_word)) {
+  int source_id = source_data_array->GetWordId(source_word);
+  int target_id = target_data_array->GetWordId(target_word);
+  if (source_id == -1 || target_id == -1) {
     return -1;
   }
 
-  int source_id = source_data_array->GetWordId(source_word);
-  int target_id = target_data_array->GetWordId(target_word);
-  return translation_probabilities[make_pair(source_id, target_id)].second;
+  auto entry = make_pair(source_id, target_id);
+  auto it = translation_probabilities.find(entry);
+  if (it == translation_probabilities.end()) {
+    return 0;
+  }
+  return it->second.second;
 }
 
-void TranslationTable::WriteBinary(const fs::path& filepath) const {
-  FILE* file = fopen(filepath.string().c_str(), "w");
-
-  int size = translation_probabilities.size();
-  fwrite(&size, sizeof(int), 1, file);
-  for (auto entry: translation_probabilities) {
-    fwrite(&entry.first, sizeof(entry.first), 1, file);
-    fwrite(&entry.second, sizeof(entry.second), 1, file);
-  }
+bool TranslationTable::operator==(const TranslationTable& other) const {
+  return *source_data_array == *other.source_data_array &&
+         *target_data_array == *other.target_data_array &&
+         translation_probabilities == other.translation_probabilities;
 }
 
 } // namespace extractor

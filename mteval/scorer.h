@@ -25,7 +25,6 @@ class Score : public boost::intrusive_refcount<Score> {
  public:
   virtual ~Score();
   virtual float ComputeScore() const = 0;
-  virtual float ComputeSentScore() const = 0;
   virtual float ComputePartialScore() const =0;
   virtual void ScoreDetails(std::string* details) const = 0;
   std::string ScoreDetails() {
@@ -84,10 +83,11 @@ class SentenceScorer {
 
 //TODO: should be able to GetOne GetZero without supplying sentence (just type)
 class DocScorer {
+ friend class DocStreamScorer;
  public:
-  ~DocScorer();
+  virtual ~DocScorer();
   DocScorer() {  }
-  void Init(const ScoreType type,
+  virtual void Init(const ScoreType type,
             const std::vector<std::string>& ref_files,
             const std::string& src_file = "",
             bool verbose=false
@@ -101,11 +101,35 @@ class DocScorer {
     Init(type,ref_files,src_file,verbose);
   }
 
-  int size() const { return scorers_.size(); }
-  ScorerP operator[](size_t i) const { return scorers_[i]; }
+  virtual int size() const { return scorers_.size(); }
+  virtual ScorerP operator[](size_t i) const { return scorers_[i]; }
+  virtual void update(const std::string& /*ref*/) {}
  private:
   std::vector<ScorerP> scorers_;
 };
 
+class DocStreamScorer : public DocScorer {
+	public:
+		~DocStreamScorer();
+		void Init(const ScoreType type,
+					const std::vector<std::string>& ref_files,
+					const std::string& src_file = "",
+					bool verbose=false
+			);
+		DocStreamScorer(const ScoreType type,
+					const std::vector<std::string>& ref_files,
+					const std::string& src_file = "",
+					bool verbose=false
+					)
+		{
+			Init(type,ref_files,src_file,verbose);
+		}
+		ScorerP operator[](size_t /*i*/) const { return scorer; }
+		int size() const { return 1; }
+		void update(const std::string& ref);
+	private:
+		ScoreType type;
+		ScorerP scorer;
+};
 
 #endif

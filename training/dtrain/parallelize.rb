@@ -4,7 +4,7 @@ require 'trollop'
 
 def usage
   STDERR.write "Usage: "
-  STDERR.write "ruby parallelize.rb -c <dtrain.ini> [-e <epochs=10>] [--randomize/-z] [--reshard/-y] -s <#shards|0> [-p <at once=9999>] -i <input> -r <refs> [--qsub/-q] [--dtrain_binary <path to dtrain binary>] [-l \"l2 select_k 100000\"]\n"
+  STDERR.write "ruby parallelize.rb -c <dtrain.ini> [-e <epochs=10>] [--randomize/-z] [--reshard/-y] -s <#shards|0> [-p <at once=9999>] -i <input> -r <refs> [--qsub/-q] [--dtrain_binary <path to dtrain binary>] [-l \"l2 select_k 100000\"] [--extra_qsub \"-l virtual_free=24G\"]\n"
   exit 1
 end
 
@@ -20,6 +20,9 @@ opts = Trollop::options do
   opt :references, "references", :type => :string
   opt :qsub, "use qsub", :type => :bool, :default => false
   opt :dtrain_binary, "path to dtrain binary", :type => :string
+  opt :extra_qsub, "extra qsub args", :type => :string, :default => ""
+  opt :per_shard_decoder_configs, "give special decoder config per shard", :type => :string, :short => '-o'
+  opt :first_input_weights, "input weights for first iter", :type => :string, :default => '', :short => '-w'
 end
 usage if not opts[:config]&&opts[:shards]&&opts[:input]&&opts[:references]
 
@@ -40,9 +43,11 @@ epochs     = opts[:epochs]
 rand       = opts[:randomize]
 reshard    = opts[:reshard]
 predefined_shards = false
+per_shard_decoder_configs = false
 if opts[:shards] == 0
   predefined_shards = true
   num_shards = 0
+  per_shard_decoder_configs = true if opts[:per_shard_decoder_configs]
 else
   num_shards = opts[:shards]
 end
@@ -50,6 +55,7 @@ input = opts[:input]
 refs  = opts[:references]
 use_qsub       = opts[:qsub]
 shards_at_once = opts[:processes_at_once]
+first_input_weights  = opts[:first_input_weights]
 
 `mkdir work`
 
@@ -100,6 +106,9 @@ refs_files = []
 if predefined_shards
   input_files = File.new(input).readlines.map {|i| i.strip }
   refs_files = File.new(refs).readlines.map {|i| i.strip }
+  if per_shard_decoder_configs
+    decoder_configs = File.new(opts[:per_shard_decoder_configs]).readlines.map {|i| i.strip}
+  end
   num_shards = input_files.size
 else
   input_files, refs_files = make_shards input, refs, num_shards, 0, rand
@@ -119,16 +128,24 @@ end
       qsub_str_start = qsub_str_end = ''
       local_end = ''
       if use_qsub
-        qsub_str_start = "qsub -cwd -sync y -b y -j y -o work/out.#{shard}.#{epoch} -N dtrain.#{shard}.#{epoch} \""
+        qsub_str_start = "qsub #{opts[:extra_qsub]} -cwd -sync y -b y -j y -o work/out.#{shard}.#{epoch} -N dtrain.#{shard}.#{epoch} \""
         qsub_str_end = "\""
         local_end = ''
       else
-        local_end = "&>work/out.#{shard}.#{epoch}"
+        local_end = "2>work/out.#{shard}.#{epoch}"
+      end
+      if per_shard_decoder_configs
+        cdec_cfg = "--decoder_config #{decoder_configs[shard]}"
+      else
+        cdec_cfg = ""
+      end
+      if first_input_weights!='' && epoch == 0
+        input_weights = "--input_weights #{first_input_weights}"
       end
       pids << Kernel.fork {
-        `#{qsub_str_start}#{dtrain_bin} -c #{ini}\
+        `#{qsub_str_start}#{dtrain_bin} -c #{ini} #{cdec_cfg} #{input_weights}\
           --input #{input_files[shard]}\
-          --refs #{refs_files[shard]} #{input_weights}\
+          --refs #{refs_files[shard]}\
           --output work/weights.#{shard}.#{epoch}#{qsub_str_end} #{local_end}`
       }
       weights_files << "work/weights.#{shard}.#{epoch}"

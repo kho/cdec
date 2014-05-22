@@ -38,7 +38,6 @@ my $CCONFIG = {
     'JobControl'  => 'qsub',
     'QSubMemFlag' => '-l pmem=',
     'QSubQueue' => '-q wide',
-    #'QSubQueue' => '-q batch',
     'QSubExtraFlags' => '-V -l walltime=2:00:00',
     'DefaultJobs' => 15,
   },
@@ -64,11 +63,11 @@ my $CCONFIG = {
     'JobControl'  => 'fork',
     'DefaultJobs' => 8,
   },
-  'OxfordDeathSnakes' => {
-    'HOST_REGEXP' => qr/^(taipan|tiger).cs.ox.ac.uk$/,
-    'JobControl'  => 'fork',
-    'DefaultJobs' => 12,
-  },
+#  'OxfordDeathSnakes' => {
+#    'HOST_REGEXP' => qr/^(taipan|tiger).cs.ox.ac.uk$/,
+#    'JobControl'  => 'fork',
+#    'DefaultJobs' => 12,
+#  },
   'cluster.cl.uni-heidelberg.de' => {
     'HOST_REGEXP' => qr/node25/,
     'JobControl'  => 'qsub',

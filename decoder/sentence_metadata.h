@@ -5,9 +5,12 @@
 #include <map>
 #include <cassert>
 #include "lattice.h"
-#include "scorer.h"
 
-struct SentenceMetadata {
+struct DocScorer;  // deprecated, will be removed
+struct Score;     // deprecated, will be removed
+
+class SentenceMetadata {
+ public:
   friend class DecoderImpl;
   SentenceMetadata(int id, const Lattice& ref) :
     sent_id_(id),

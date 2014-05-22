@@ -5,7 +5,12 @@
 #include <iostream>
 #include <limits>
 #include <sstream>
-#include <tr1/unordered_map>
+#ifndef HAVE_OLD_CPP
+# include <unordered_map>
+#else
+# include <tr1/unordered_map>
+namespace std { using std::tr1::unordered_map; }
+#endif
 #include <set>
 #include <valarray>
 #include <boost/functional/hash.hpp>
@@ -16,7 +21,6 @@ const bool ter_use_average_ref_len = true;
 const int ter_short_circuit_long_sentences = -1;
 
 using namespace std;
-using namespace std::tr1;
 
 struct COSTS {
   static const float substitution;
@@ -425,8 +429,6 @@ class TERScore : public ScoreBase<TERScore> {
 
  TERScore() : stats(0,kDUMMY_LAST_ENTRY) {}
   float ComputePartialScore() const { return 0.0;}
-  float ComputeSentScore() const { return ComputeScore(); }
-
   float ComputeScore() const {
     float edits = static_cast<float>(stats[kINSERTIONS] + stats[kDELETIONS] + stats[kSUBSTITUTIONS] + stats[kSHIFTS]);
     return edits / static_cast<float>(stats[kREF_WORDCOUNT]);
@@ -438,19 +440,7 @@ class TERScore : public ScoreBase<TERScore> {
       stats += static_cast<const TERScore&>(delta).stats;
     if (scale==-1)
       stats -= static_cast<const TERScore&>(delta).stats;
- else
-    {
-     stats[kINSERTIONS] += scale * static_cast<float>(static_cast<const TERScore&>(delta).stats[kINSERTIONS]);
-     stats[kDELETIONS]+= scale * (float)static_cast<const TERScore&>(delta).stats[kDELETIONS];
-     stats[kSUBSTITUTIONS]+= scale * (float)static_cast<const TERScore&>(delta).stats[kSUBSTITUTIONS];
-     stats[kSHIFTS]+= scale * (float)static_cast<const TERScore&>(delta).stats[kSHIFTS];
-     stats[kREF_WORDCOUNT]+= scale * (float) static_cast<const TERScore&>(delta).stats[kREF_WORDCOUNT];
-
-//    throw std::runtime_error("TERScore::PlusEquals with scale != +-1");
-
-     }
-
-//    throw std::runtime_error("TERScore::PlusEquals with scale != +-1");
+    throw std::runtime_error("TERScore::PlusEquals with scale != +-1");
  }
   void PlusEquals(const Score& delta) {
     stats += static_cast<const TERScore&>(delta).stats;
