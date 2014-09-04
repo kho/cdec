@@ -218,4 +218,8 @@ AC_CONFIG_FILES([klm/lm/builder/Makefile])
 AC_CONFIG_FILES([training/Makefile])
 AC_CONFIG_FILES([training/utils/Makefile])
 
+#feature stuff
+AC_CONFIG_FILES([synutils/maxent-3.0/Makefile])
+AC_CONFIG_FILES([synutils/Makefile])
+
 AC_OUTPUT

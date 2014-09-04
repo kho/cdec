@@ -11,6 +11,8 @@ SUBDIRS = \
   klm/lm \
   klm/lm/builder \
   klm/search \
+  synutils/maxent-3.0 \
+  synutils \
   decoder \
   training/utils
 

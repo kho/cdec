@@ -43,3 +43,11 @@ setup(name = "LCP", version = '1.0', description = 'C impl. of LCP', ext_modules
 precomp_module = Extension('precomputation', sources = ['precomputation.c'])
 setup(name = "Precomputation", version = '1.0', description = 'Precomputation Algorithm', ext_modules = [precomp_module])
 
+csyncon_module = Extension('csyncon', sources = ['csyncon.c'])
+setup(name = "CSyntacticConstrain", version = '1.0', description = 'C syntactic constraint class', ext_modules = [csyncon_module])
+
+csynctx_module = Extension('csynctx', sources = ['csynctx.c'])
+setup(name = "CSyntacticContext", version = '1.0', description = 'C syntactic context class', ext_modules = [csynctx_module])
+
+cbitlist_module = Extension('cbitlist', sources = ['cbitlist.c'])
+setup(name = "CBitList", version = '1.0', description = 'C bit list class', ext_modules = [cbitlist_module])

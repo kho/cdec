@@ -1,0 +1,52 @@
+Preparing syntctic constraint class
+  1) edit csyncon.pxd and csyncon.pyx
+  2) add an entry for csyncon in setup.py
+  3) add an item for csyncon in Makefile
+
+
+Compiling
+  1) Edit Makefile to make sure that python and cython path are correct
+
+  2) make clean && make
+
+
+Applying syntactic constraints on sa-extract
+
+1) Compiling training sentence pairs
+   I) without syntactic constraints 
+      $command = "$sadir/sa-compile.pl -p max-size=10,min-gap=2 -a gdfa=$datadir/align/aligned.grow-diag-final-and.soseos -b gq=$datadir/data/train.soseos.cn,$datadir/data/train.soseos.en -o $expdir > $expdir/extract.ini";
+   II) with syntactic constraints
+      $command = "$sadir/add-sos-eos-parse.pl < $datadir/data/train.sm6.cn > $datadir/data/train.sm6.soseos.cn";
+      $command = "$sadir/sa-compile.pl -p max-size=100000,min-gap=2 -a gdfa=$datadir/align/aligned.grow-diag-final-and.soseos -b gq=$datadir/data/train.soseos.cn,$datadir/data/train.soseos.en -o $expdir -syncon $datadir/data/train.sm6.soseos.cn,3 > $expdir/extract.ini";
+      Two differences from previous command: one is the value of "max-size", the other is the additional parameter "-s $datadir/data/train.sm6.soseos.cn,3", where $datadir/data/train.sm6.soseos.cn indicates the syntactic file and 3 indicates the syntactic constraint type.
+      In $sadir/sa-compile.pl, it will call $sadir/extract_syncon to extract syntactic constraints accordingly. (The source file of extract_syncon is located at $sadir/extract_syncon.cpp)
+      (Note: since the aligned, train files are all with sentence boundaries (<s> .. </s>), we need to add sentence boundaries to parse trees accordingly (i.e., from train.sm6.cn to train.sm6.soseos.cn).) 
+
+
+2) Extracting grammar
+   I) without syntactic constraints
+      $command = "cat $testdatadir/$testset.cn | $sadir/escape-testset.pl | $sadir/extractor.py -c $expdir/extract.ini -x $expdir/$testset/gra";
+   II) with syntactic constraints
+      $command = "$sadir/extract_syn_con $testdatadir/$testset.sm6.soseos.cn 3 $testdatadir/$testset.sm6.soseos.syncon.cn.gz"; 
+      $command = "cat $testdatadir/$testset.cn | $sadir/escape-testset.pl | $sadir/extractor.py -c $expdir/extract.ini -x $expdir/$testset/gra -s $testdatadir/$testset.sm6.soseos.syncon.cn.gz";
+      One difference from previous command: tell the extractor where the syntactic constraints are via "-s $testdatadir/$testset.sm6.syncon.cn.gz".
+      (Note: since extractor.py will automatically add sentence boundaries for each sentence, the syntactic constraint file (e.g., $testdatadir/$testset.sm6.soseos.syncon.cn.gz)should also contain sentence boundaries.)
+
+---------------------------------------------------------
+
+Applying syntactic constraints on decoding
+
+1) Adding syntactic constraint info into my_source_file
+   I) without syntactic constraints
+      $command = "cat $testdatadir/$test.soseos.zh | $cdec_dir/sa-extract/escape-testset-add-grammar-gz.pl $exp_dir/grammar/$test/gra > $exp_dir/grammar/$test/my_source_file";
+   II) with syntactic constraints
+      $command = "$sadir/extract_syn_con $testdatadir/$test.sm6.soseos.cn 3 $testdatadir/$test.sm6.soseos.syncon.cn.gz";
+      $command = "cat $testdatadir/$test.soseos.zh | $cdec_dir/sa-extract/escape-testset-add-grammar-gz-syntactic-constraints.pl -p $exp_dir/grammar/$test/gra -s $testdatadir/$test.sm6.soseos.syncon.cn.gz > $exp_dir/grammar/$test/my_source_file";
+
+2) Decoding (there is no change in run decoding command, since the constraints are encoded in my_source_file)
+   I) without syntactic constraints
+      $command = "cat $exp_dir/grammar/$test/my_source_file | $cdec_dir/decoder/cdec -w $tune_dir/weights.$best_weight_id -c $exp_dir/cdec.ini > $decode_dir/test.cdecOUT 2> $decode_dir/output";
+   II) with syntactic constraints
+      $command = "cat $exp_dir/grammar/$test/my_source_file | $cdec_dir/decoder/cdec -w $tune_dir/weights.$best_weight_id -c $exp_dir/cdec.ini > $decode_dir/test.cdecOUT 2> $decode_dir/output";
+
+      

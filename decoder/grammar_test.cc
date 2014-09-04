@@ -54,7 +54,7 @@ BOOST_AUTO_TEST_CASE(TestTextGrammarFile) {
   lattice[1].push_back(b);
   Hypergraph forest;
   ExhaustiveBottomUpParser parser("PHRASE", grammars);
-  parser.Parse(lattice, &forest);
+  parser.Parse(lattice, NULL, &forest);
   forest.PrintGraphviz();
 }
 BOOST_AUTO_TEST_SUITE_END()

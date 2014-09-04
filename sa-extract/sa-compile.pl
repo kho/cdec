@@ -28,6 +28,8 @@ my $remove;
 my $type;
 my $local_only = 1;
 my $output;
+my $syncon_text; #for syntactic constraints
+my $synctx_text; #for syntactic context
 
 # Process command-line options
 if (GetOptions(
@@ -38,6 +40,8 @@ if (GetOptions(
   "output=s" => \$output,
   "precomp-options=s" => \$precomp,
   "no-ini" => \$no_ini,
+  "syncon=s" => \$syncon_text,
+  "synctx=s" => \$synctx_text,
 ) == 0 || $help == 1 || @ARGV > 0){
   print_help;
   die "\n";
@@ -83,6 +87,21 @@ if ($bitext){
     }
   }
 }
+
+my $syn_f_file; #syntactic source file
+my $syn_con_type; #syntactic constraint type, only support 1, 2, 3
+my $syncon_file = "None";
+if ($syncon_text){
+  if ($syncon_text =~ /(.*),(.*)/){
+    $syn_f_file = $1;
+    $syn_con_type = $2;
+    -e $syn_f_file || die "Could not find file $syn_f_file\n";
+  } else {
+    die "the value for --syncon is in incorrect format, it should be like syntactic_file_name,syntact_constraint_type, i.e. train.sm6.soseos.cn,3\n";
+  }
+}
+
+my $synctx_file = "None";
 
 my $max_nt = 2;
 my $max_len = 5;
@@ -168,6 +187,11 @@ if ($alignment_name){
 } else {
   print STDERR " No alignment\n";
 }
+if ($synctx_text) {
+  print STDERR " from file $synctx_text\n";
+} else {
+  print STDERR " No syntactic context\n";
+}
 
 my $script;
 my $compile_dir;
@@ -175,21 +199,27 @@ $SIG{INT} = "cleanup";
 $SIG{TERM} = "cleanup"; 
 $SIG{HUP} = "cleanup";
 
-  if ($bitext_e_file || $precomp_compile_needed || $alignment_file){
+  if ($bitext_e_file || $precomp_compile_needed || $alignment_file || $syn_f_file || $synctx_text){
     my $compiled_e_file;
     my $compiled_f_file;
 
     $compile_dir = $top_dir;
     my $compile_top_dir = "$compile_dir";
 
+    my $mycmd;
+
     my $compile_bitext_dir = "$compile_top_dir/bitext/$bitext_name";
     if ($bitext_e_file){
       `mkdir -p $compile_bitext_dir`;
       print STDERR "\nCompiling bitext (f side)...\n";
-      `$compile -s $bitext_f_file $compile_bitext_dir/f.sa.bin`;
+      $mycmd = "$compile -s $bitext_f_file $compile_bitext_dir/f.sa.bin";
+      print STDERR "  $mycmd\n";
+      `$mycmd`;
       die "Command failed: $!" unless $? == 0;
       print STDERR "\nCompiling bitext (e side)...\n";
-      `$compile -d $bitext_e_file $compile_bitext_dir/e.bin`;
+      $mycmd = "$compile -d $bitext_e_file $compile_bitext_dir/e.bin";
+      print STDERR "  $mycmd\n";
+      `$mycmd`;
       die "Command failed: $!" unless $? == 0;
 
       $compiled_f_file = "$compile_bitext_dir/f.sa.bin";
@@ -204,10 +234,12 @@ $SIG{HUP} = "cleanup";
       my $top_stats_file = "$compile_bitext_dir/f.top.$rank1";
       my $compiled_precomp_file = "$compile_bitext_dir/precomp.$max_len.$max_nt.$max_size.$min_gap.$rank1.$rank2.bin";
       my $cmd = "$lcp -t 4 $compiled_f_file | sort -nr | head -$rank1 > $top_stats_file";
-      print STDERR "$cmd\n";
+      print STDERR "  $cmd\n";
       `$cmd`;
       die "Command failed: $cmd" unless $? == 0;
-      `$compile -r max-len=$max_len max-nt=$max_nt max-size=$max_size min-gap=$min_gap rank1=$rank1 rank2=$rank2 sa=$compiled_f_file $top_stats_file $compiled_precomp_file`;
+      $mycmd = "$compile -r max-len=$max_len max-nt=$max_nt max-size=$max_size min-gap=$min_gap rank1=$rank1 rank2=$rank2 sa=$compiled_f_file $top_stats_file $compiled_precomp_file";
+      print STDERR "  $mycmd\n";
+      `$mycmd`;
       die "Command failed: $!" unless $? == 0;
     }
 
@@ -226,6 +258,31 @@ $SIG{HUP} = "cleanup";
       `$cmd`;
       die "Command failed: $!" unless $? == 0;
     }
+    
+    if ($syncon_text){
+      my $syncon_extractor = "$rootdir/extract_syncon";
+      my $compile_syncon_dir = "$compile_top_dir/bitext/$bitext_name/s";
+      `mkdir -p $compile_syncon_dir`;
+      my $cmd = "$syncon_extractor $syn_f_file $syn_con_type $compile_syncon_dir/sc.gz 0";
+      $syncon_file = "\"$compile_syncon_dir/sc.gz\"";
+      `$cmd`;
+      my $return_value = $? >> 8;
+      die "Command failed: $!" unless $return_value == 1;
+    } else {
+      $syncon_file = "None";
+    }
+    
+    if ($synctx_text) {
+      print STDERR "\nCompiling synatctic context file ...\n";
+      my $compile_synctx_dir = "$compile_top_dir/bitext/$bitext_name/s";
+      `mkdir -p $compile_synctx_dir`;
+      my $cmd = "$compile -c $synctx_text $compile_synctx_dir/synctx.gz";
+      $synctx_file = "\"$compile_synctx_dir/synctx.gz\"";
+      `$cmd`;
+      die "Command failed: $!" unless $? == 0;
+    } else {
+      $synctx_file = "None";
+    }
 
     chdir $compile_dir;
     print STDERR "Compiling done: $compile_dir\n";
@@ -239,6 +296,8 @@ $SIG{HUP} = "cleanup";
       $line =~ s/^([^#]*f_sa_file\s*=\s*")(.*)("\s*)$/$1$bitext_dir\/f.sa.bin$3/;
       $line =~ s/^([^#]*e_file\s*=\s*")(.*)("\s*)$/$1$bitext_dir\/e.bin$3/;
       $line =~ s/^([^#]*precompute_file\s*=\s*")(.*)("\s*)$/$1$bitext_dir\/precomp.$max_len.$max_nt.$max_size.$min_gap.$rank1.$rank2.bin$3/;
+      $line =~ s/^([^#]*f_sc_file\s*=\s*)(".*")(\s*)$/$1$syncon_file$3/;
+      $line =~ s/^([^#]*f_synctx_file\s*=\s*)(".*")(\s*)$/$1$synctx_file$3/;
 
       $line =~ s/^([^#]*max_len\s*=\s*)(.*)(\s*)$/$1$max_len$3/;
       $line =~ s/^([^#]*max_nt\s*=\s*)(.*)(\s*)$/$1$max_nt$3/;
@@ -317,6 +376,9 @@ options:
 
   -o, --output-dir
     Write the compiled model to this directory.
+
+  -s, --syncon <syntactic file>,<syntactic constraint type>
+    Use syntactic constraints while performing rule extraction.
 
 Help
 }

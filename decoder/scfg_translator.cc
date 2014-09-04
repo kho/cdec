@@ -32,6 +32,27 @@ struct PassThroughGrammar : public TextGrammar {
   virtual bool HasRuleForSpan(int i, int j, int distance) const;
 };
 
+
+/*
+ * reorderable syntactic constrained glue grammar (RSCG)
+ * Rule1: S --> X1, X1
+ * Rule2: S --> S1 S2, S1 S2
+ * Rule3: S --> S1 S2, S2 S1
+ * unlike glue grammar rules which stitches translated phrases from left to right
+ * the new grammar rules will stitch any two neighboring translated phrases as long as the new node satisfy the syntactic constraints
+ *
+ * plus, define a feature "RSCG" whose feature value is:
+ * Rule1: 0 (thus no need add RSCG for this rule, same as S --> X1, X1 in glue grammar rules
+ * Rule2: log (0.9567)
+ * Rule3: log (0.0433)
+ */
+struct ReorderableSynConGlueGrammar : public TextGrammar {
+  //read RSCG from file
+  explicit ReorderableSynConGlueGrammar(const std::string& file);
+  ReorderableSynConGlueGrammar(const std::string& goal_nt, const std::string& default_nt, const unsigned int ctf_level=0); //"S", "X"
+  virtual bool HasRuleForSpan(int i, int j, int distance) const;
+};
+
 GlueGrammar::GlueGrammar(const string& file) : TextGrammar(file) {}
 
 static void RefineRule(TRulePtr pt, const unsigned int ctf_level){
@@ -80,6 +101,30 @@ PassThroughGrammar::PassThroughGrammar(const Lattice& input, const string& cat, 
 
 bool PassThroughGrammar::HasRuleForSpan(int, int, int distance) const {
   return (distance < 4);  // TODO this isn't great, but helps with EPS lattices
+}
+
+ReorderableSynConGlueGrammar::ReorderableSynConGlueGrammar(const std::string& file): TextGrammar(file) {}
+
+ReorderableSynConGlueGrammar::ReorderableSynConGlueGrammar(const string& goal_nt, const string& default_nt, const unsigned int ctf_level) {
+  TRulePtr stop_glue(new TRule("[" + goal_nt + "] ||| [" + default_nt + ",1] ||| [1]"));
+  AddRule(stop_glue);
+  RefineRule(stop_glue, ctf_level);
+  double feature_value = log(0.954882);
+  std::ostringstream strs1;
+  strs1 << feature_value;
+  TRulePtr mono_glue(new TRule("[" + goal_nt + "] ||| [" + goal_nt + ",1] ["+ goal_nt + ",2] ||| [1] [2] ||| Glue=" + strs1.str()));
+  AddRule(mono_glue);
+  RefineRule(mono_glue, ctf_level);
+  feature_value = log(0.0451176);
+  std::ostringstream strs2;
+  strs2 << feature_value;
+  TRulePtr swap_glue(new TRule("[" + goal_nt + "] ||| [" + goal_nt + ",1] ["+ goal_nt + ",2] ||| [2] [1] ||| Glue=" + strs2.str()));
+  AddRule(swap_glue);
+  RefineRule(swap_glue, ctf_level);
+}
+
+bool ReorderableSynConGlueGrammar::HasRuleForSpan(int /* i */, int /* j */, int /* distance */) const {
+  return true;
 }
 
 struct SCFGTranslatorImpl {
@@ -135,6 +180,12 @@ struct SCFGTranslatorImpl {
       grammars.push_back(GrammarPtr(g));
       if (!SILENT) cerr << "Adding glue grammar for default nonterminal " << default_nt <<
         " and goal nonterminal " << goal << endl;
+    }
+    if (conf.count("scfg_reorderable_syntactic_constrained_glue_grammar")) {
+      assert(conf.count("scfg_no_hiero_glue_grammar")); //only when hiero glue grammar is switched off
+      ReorderableSynConGlueGrammar* g = new ReorderableSynConGlueGrammar(goal, default_nt, ctf_iterations_);
+      g->SetGrammarName("ReorderableSyntacticConstrainedGrammar");
+      grammars.push_back(GrammarPtr(g));
     }
  }
 
@@ -197,7 +248,7 @@ struct SCFGTranslatorImpl {
     }
     if (!SILENT) cerr << "First pass parse... " << endl;
     ExhaustiveBottomUpParser parser(goal, glist);
-    if (!parser.Parse(lattice, forest)){
+    if (!parser.Parse(lattice, smeta, forest)){
       if (!SILENT) cerr << "  parse failed." << endl;
       return false;
     } else {

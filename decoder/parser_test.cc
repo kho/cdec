@@ -19,6 +19,6 @@ BOOST_AUTO_TEST_CASE(Parse) {
   GrammarPtr g(new TextGrammar);
   vector<GrammarPtr> grammars(1, g);
   ExhaustiveBottomUpParser parser("PHRASE", grammars);
-  parser.Parse(lattice, &forest);
+  parser.Parse(lattice, NULL, &forest);
 }
 
