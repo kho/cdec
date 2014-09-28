@@ -28,6 +28,7 @@
 #include "ff_hash.h"
 #include "ff_const_reorder.h"
 #include "ff_soft_syn.h"
+#include "ff_lexical.h"
 
 
 void register_feature_functions() {
@@ -44,13 +45,13 @@ void register_feature_functions() {
   RegisterFF<ArityPenalty>();
   RegisterFF<BLEUModel>();
   RegisterFF<Discourse>();
+  RegisterFF<LexicalFeatures>();
 
   //TODO: use for all features the new Register which requires static FF::usage(false,false) give name
   ff_registry.Register("SpanFeatures", new FFFactory<SpanFeatures>());
   ff_registry.Register("NgramFeatures", new FFFactory<NgramDetector>());
   ff_registry.Register("RuleContextFeatures", new FFFactory<RuleContextFeatures>());
   ff_registry.Register("RuleIdentityFeatures", new FFFactory<RuleIdentityFeatures>());
-  ff_registry.Register("RuleWordAlignmentFeatures", new FFFactory<RuleWordAlignmentFeatures>());
   ff_registry.Register("ParseMatchFeatures", new FFFactory<ParseMatchFeatures>);
   ff_registry.Register("SoftSyntaxFeatures", new FFFactory<SoftSyntaxFeatures>);
   ff_registry.Register("SoftSyntaxFeaturesMindist", new FFFactory<SoftSyntaxFeaturesMindist>);
@@ -91,4 +92,3 @@ void register_feature_functions() {
   ff_registry.Register("ContextCRF", new FFFactory<Model1Features>);
 #endif
 }
-

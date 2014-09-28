@@ -11,6 +11,8 @@ from libc.math cimport fmod, ceil, floor, log
 
 from collections import defaultdict, Counter, namedtuple
 
+from online import Bilex
+
 FeatureContext = namedtuple('FeatureContext',
     ['fphrase', 
      'ephrase', 
@@ -31,6 +33,7 @@ OnlineFeatureContext = namedtuple('OnlineFeatureContext',
     ['fcount',
      'fsample_count',
      'paircount',
+     'bilex',
     ])
 
 cdef class OnlineStats:
@@ -39,6 +42,7 @@ cdef class OnlineStats:
     cdef public phrases_e
     cdef public phrases_fe
     cdef public phrases_al
+    cdef public bilex
 
     def __cinit__(self):
         # Keep track of everything that can be sampled:
@@ -49,6 +53,9 @@ cdef class OnlineStats:
         self.phrases_e = defaultdict(int)
         self.phrases_fe = defaultdict(lambda: defaultdict(int))
         self.phrases_al = defaultdict(lambda: defaultdict(tuple))
+
+        # Instance-specific bilex
+        self.bilex = Bilex()
 
 cdef int PRECOMPUTE = 0
 cdef int MERGE = 1
@@ -291,10 +298,13 @@ cdef class HieroCachingRuleFactory:
 
     cdef bint online
     cdef online_stats
+    cdef bilex
 
     def __cinit__(self,
             # compiled alignment object (REQUIRED)
             Alignment alignment,
+            # bilexical dictionary if online
+            bilex=None,
             # parameter for double-binary search; doesn't seem to matter much
             float by_slack_factor=1.0,
             # name of generic nonterminal used by Hiero
@@ -400,7 +410,11 @@ cdef class HieroCachingRuleFactory:
         self.findexes1 = IntList(initial_len=10)
         
         # Online stats 
-        
+
+        # None if not online
+        # Base bilex, also need one per instance
+        self.bilex = bilex
+
         # True after data is added
         self.online = False
         self.online_stats = defaultdict(OnlineStats)
@@ -1356,8 +1370,12 @@ cdef class HieroCachingRuleFactory:
     cdef extract_phrases(self, int e_low, int e_high, int* e_gap_low, int* e_gap_high, int* e_links_low, int num_gaps,
                         int f_low, int f_high, int* f_gap_low, int* f_gap_high, int* f_links_low, 
                         int sent_id, int e_sent_len, int e_sent_start):
-        cdef int i, j, k, m, n, *e_gap_order, e_x_low, e_x_high, e_x_gap_low, e_x_gap_high
-        cdef int *e_gaps1, *e_gaps2, len1, len2, step, num_chunks
+        cdef int i, j, k, m, n
+        cdef int *e_gap_order
+        cdef int e_x_low, e_x_high, e_x_gap_low, e_x_gap_high
+        cdef int *e_gaps1
+        cdef int *e_gaps2
+        cdef int len1, len2, step, num_chunks
         cdef IntList ephr_arr
         cdef result
 
@@ -1473,8 +1491,16 @@ cdef class HieroCachingRuleFactory:
         return ret
                 
     cdef extract(self, Phrase phrase, Matching* matching, int* chunklen, int num_chunks):
-        cdef int* sent_links, *e_links_low, *e_links_high, *f_links_low, *f_links_high
-        cdef int *f_gap_low, *f_gap_high, *e_gap_low, *e_gap_high, num_gaps, gap_start
+        cdef int *sent_links
+        cdef int *e_links_low
+        cdef int *e_links_high
+        cdef int *f_links_low
+        cdef int *f_links_high
+        cdef int *f_gap_low
+        cdef int *f_gap_high
+        cdef int *e_gap_low
+        cdef int *e_gap_high
+        cdef int num_gaps, gap_start
         cdef int i, j, k, e_i, f_i, num_links, num_aligned_chunks, met_constraints, x
         cdef int f_low, f_high, e_low, e_high, f_back_low, f_back_high
         cdef int e_sent_start, e_sent_end, f_sent_start, f_sent_end, e_sent_len, f_sent_len
@@ -2039,6 +2065,9 @@ cdef class HieroCachingRuleFactory:
             stats.phrases_fe[f_ph][e_ph] += 1
             if not stats.phrases_al[f_ph][e_ph]:
                 stats.phrases_al[f_ph][e_ph] = al
+
+        # Update bilexical dictionary
+        stats.bilex.update(f_words, e_words, alignment)
             
     # Create a rule from source, target, non-terminals, and alignments
     def form_rule(self, f_i, e_i, f_span, e_span, nt, al):
@@ -2119,7 +2148,7 @@ cdef class HieroCachingRuleFactory:
             fsample_count = stats.samples_f.get(f, 0)
             d = stats.phrases_fe.get(f, None)
             paircount = d.get(e, 0) if d else 0
-            return OnlineFeatureContext(fcount, fsample_count, paircount)
+            return OnlineFeatureContext(fcount, fsample_count, paircount, stats.bilex)
         return None
     
     # Find all phrases that we might try to extract

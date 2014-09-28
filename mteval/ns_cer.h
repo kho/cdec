@@ -5,9 +5,6 @@
 
 class CERMetric : public EvaluationMetric {
   friend class EvaluationMetric;
- private:
-  unsigned EditDistance(const std::string& hyp,
-                        const std::string& ref) const;
  protected:
   CERMetric() : EvaluationMetric("CER") {}
 

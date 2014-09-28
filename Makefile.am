@@ -4,13 +4,13 @@
 
 SUBDIRS = \
   utils \
-  mteval \
   klm/util/double-conversion \
   klm/util \
   klm/util/stream \
   klm/lm \
   klm/lm/builder \
   klm/search \
+  mteval \
   synutils/maxent-3.0 \
   synutils \
   decoder \

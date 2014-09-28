@@ -95,7 +95,8 @@ bool InitCommandLine(int argc, char** argv, po::variables_map* conf) {
     ("stream,t", "Stream mode (used for realtime)")
     ("weights_output,O",po::value<string>(),"Directory to write weights to")
     ("output_dir,D",po::value<string>(),"Directory to place output in")
-    ("decoder_config,c",po::value<string>(),"Decoder configuration file");
+    ("decoder_config,c",po::value<string>(),"Decoder configuration file")
+	("verbose,v",po::value<bool>()->zero_tokens(),"verbose stderr output");
   po::options_description clo("Command line options");
   clo.add_options()
     ("config", po::value<string>(), "Configuration file")
@@ -340,23 +341,22 @@ struct BasicObserver: public DecoderObserver {
 };
 
 struct TrainingObserver : public DecoderObserver {
-  TrainingObserver(const int k, const DocScorer& d, vector<GoodBadOracle>* o, vector<ScoreP>* cbs) : ds(d), oracles(*o), corpus_bleu_sent_stats(*cbs), kbest_size(k) {
-    
-
-    if(!pseudo_doc && !sent_approx)
-    if(cur_pass > 0)     //calculate corpus bleu score from previous iterations 1-best for BLEU gain
-      {
-	ScoreP acc;
-	for (int ii = 0; ii < corpus_bleu_sent_stats.size(); ii++) {
-	  if (!acc) { acc = corpus_bleu_sent_stats[ii]->GetZero(); }
-	  acc->PlusEquals(*corpus_bleu_sent_stats[ii]);
-	  
-	}
-	corpus_bleu_stats = acc;
-	corpus_bleu_score = acc->ComputeScore();
+  TrainingObserver(const int k,
+                   const DocScorer& d,
+                   vector<GoodBadOracle>* o,
+                   vector<ScoreP>* cbs) : ds(d), oracles(*o), corpus_bleu_sent_stats(*cbs), kbest_size(k) {
+    if(!pseudo_doc && !sent_approx) {
+      if(cur_pass > 0) {    //calculate corpus bleu score from previous iterations 1-best for BLEU gain
+        ScoreP acc;
+        for (int ii = 0; ii < corpus_bleu_sent_stats.size(); ii++) {
+          if (!acc) { acc = corpus_bleu_sent_stats[ii]->GetZero(); }
+          acc->PlusEquals(*corpus_bleu_sent_stats[ii]);
+        }
+        corpus_bleu_stats = acc;
+        corpus_bleu_score = acc->ComputeScore();
       }
-
-}
+    }
+  }
   const DocScorer& ds;
   vector<ScoreP>& corpus_bleu_sent_stats;
   vector<GoodBadOracle>& oracles;
@@ -460,7 +460,6 @@ struct TrainingObserver : public DecoderObserver {
 	    }
 	  else //use sentence-level smoothing ( used when cur_pass=0 if not pseudo_doc)
 	    {
-	     
 	      sentscore = mt_metric_scale * (ds[sent_id]->ScoreCandidate(d->yield)->ComputeScore());
 	    }
 	
@@ -574,19 +573,15 @@ void ReadTrainingCorpus(const string& fname, vector<string>* c) {
   }
 }
 
-void ReadPastTranslationForScore(const int cur_pass, vector<ScoreP>* c, DocScorer& ds, const string& od)
-{
-  cerr << "Reading BLEU gain file ";
+void ReadPastTranslationForScore(const int cur_pass, vector<ScoreP>* c, DocScorer& ds, const string& od) {
+  cerr << "Reading previous score file ";
   string fname;
-  if(cur_pass == 0)
-    {
-      fname = od + "/run.raw.init";
-    }
-  else
-    {
-      int last_pass = cur_pass - 1; 
-      fname = od + "/run.raw."  +  boost::lexical_cast<std::string>(last_pass) + ".B";
-    }
+  if (cur_pass == 0) {
+    fname = od + "/run.raw.init";
+  } else {
+    int last_pass = cur_pass - 1; 
+    fname = od + "/run.raw."  +  boost::lexical_cast<std::string>(last_pass) + ".B";
+  }
   cerr << fname << "\n";
   ReadFile rf(fname);
   istream& in = *rf.stream();
@@ -603,7 +598,6 @@ void ReadPastTranslationForScore(const int cur_pass, vector<ScoreP>* c, DocScore
     if (!acc) { acc = sentscore->GetZero(); }
     acc->PlusEquals(*sentscore);
     ++lc;
- 
   }
   
   assert(lc > 0);
@@ -611,7 +605,6 @@ void ReadPastTranslationForScore(const int cur_pass, vector<ScoreP>* c, DocScore
   string details;
   acc->ScoreDetails(&details);
   cerr << "Previous run: " << details << score << endl;
-
 }
 
 
@@ -629,6 +622,7 @@ int main(int argc, char** argv) {
   
   vector<string> corpus;
 
+  const bool VERBOSE = conf.count("verbose");
   const string metric_name = conf["mt_metric"].as<string>();
   optimizer = conf["optimizer"].as<int>();
   fear_select = conf["fear"].as<int>();
@@ -670,10 +664,9 @@ int main(int argc, char** argv) {
   
   //check training pass,if >0, then use previous iterations corpus bleu stats
   cur_pass = stream ? 0 : conf["pass"].as<int>();
-  if(cur_pass > 0)
-    {
-      ReadPastTranslationForScore(cur_pass, &corpus_bleu_sent_stats, *ds, output_dir);
-    }
+  if(cur_pass > 0) {
+    ReadPastTranslationForScore(cur_pass, &corpus_bleu_sent_stats, *ds, output_dir);
+  }
   
   cerr << "Using optimizer:" << optimizer << endl;
     
@@ -792,7 +785,8 @@ int main(int argc, char** argv) {
 	  double margin = cur_bad.features.dot(dense_weights) - cur_good.features.dot(dense_weights);
 	  double mt_loss = (cur_good.mt_metric - cur_bad.mt_metric);
 	  const double loss = margin +  mt_loss;
-	  cerr << "LOSS: " << loss << " Margin:" << margin << " BLEUL:" << mt_loss << " " << cur_bad.features.dot(dense_weights) << " " << cur_good.features.dot(dense_weights) <<endl;
+	  cerr << "LOSS: " << loss << " Margin:" << margin << " BLEUL:" << mt_loss << endl;
+	  if (VERBOSE) cerr << cur_bad.features.dot(dense_weights) << " " << cur_good.features.dot(dense_weights) << endl;
 	  if (loss > 0.0 || !checkloss) {
 	    SparseVector<double> diff = cur_good.features;
 	    diff -= cur_bad.features;	    
@@ -929,6 +923,7 @@ int main(int argc, char** argv) {
 
 			lambdas += (cur_pair[1]->features) * step_size;
 			lambdas -= (cur_pair[0]->features) * step_size;
+			if (VERBOSE) cerr << " Lambdas " << lambdas << endl;
 
 			//reload weights based on update
 			dense_weights.clear();

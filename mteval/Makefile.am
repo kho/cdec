@@ -14,6 +14,7 @@ libmteval_a_SOURCES = \
   aer_scorer.h \
   comb_scorer.h \
   external_scorer.h \
+  levenshtein.h \
   ns.h \
   ns_cer.h \
   ns_comb.h \
@@ -21,6 +22,7 @@ libmteval_a_SOURCES = \
   ns_ext.h \
   ns_ssk.h \
   ns_ter.h \
+  ns_wer.h \
   scorer.h \
   ter.h \
   aer_scorer.cc \
@@ -34,6 +36,7 @@ libmteval_a_SOURCES = \
   ns_ext.cc \
   ns_ssk.cc \
   ns_ter.cc \
+  ns_wer.cc \
   scorer.cc \
   ter.cc
 
@@ -46,4 +49,4 @@ mbr_kbest_LDADD = libmteval.a ../utils/libutils.a
 scorer_test_SOURCES = scorer_test.cc
 scorer_test_LDADD = libmteval.a ../utils/libutils.a $(BOOST_UNIT_TEST_FRAMEWORK_LDFLAGS) $(BOOST_UNIT_TEST_FRAMEWORK_LIBS)
 
-AM_CPPFLAGS = -DTEST_DATA=\"$(top_srcdir)/mteval/test_data\" -DBOOST_TEST_DYN_LINK -W -Wall -Wno-sign-compare -I$(top_srcdir) -I$(top_srcdir)/utils
+AM_CPPFLAGS = -DTEST_DATA=\"$(top_srcdir)/mteval/test_data\" -DBOOST_TEST_DYN_LINK -W -Wall -Wno-sign-compare -I$(top_srcdir) -I$(top_srcdir)/utils -I$(top_srcdir)/klm

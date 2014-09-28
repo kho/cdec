@@ -4,9 +4,12 @@ noinst_PROGRAMS = \
   trule_test \
   hg_test \
   parser_test \
+  t2s_test \
   grammar_test
 
 TESTS = trule_test parser_test grammar_test hg_test
+t2s_test_SOURCES = t2s_test.cc
+t2s_test_LDADD = $(BOOST_UNIT_TEST_FRAMEWORK_LDFLAGS) $(BOOST_UNIT_TEST_FRAMEWORK_LIBS) libcdec.a ../mteval/libmteval.a ../utils/libutils.a
 parser_test_SOURCES = parser_test.cc
 parser_test_LDADD = $(BOOST_UNIT_TEST_FRAMEWORK_LDFLAGS) $(BOOST_UNIT_TEST_FRAMEWORK_LIBS) libcdec.a ../mteval/libmteval.a ../utils/libutils.a
 grammar_test_SOURCES = grammar_test.cc
@@ -17,8 +20,8 @@ trule_test_SOURCES = trule_test.cc
 trule_test_LDADD = $(BOOST_UNIT_TEST_FRAMEWORK_LDFLAGS) $(BOOST_UNIT_TEST_FRAMEWORK_LIBS) libcdec.a ../mteval/libmteval.a ../utils/libutils.a
 
 cdec_SOURCES = cdec.cc
+cdec_LDFLAGS= -rdynamic $(STATIC_FLAGS)
 cdec_LDADD = libcdec.a ../mteval/libmteval.a ../utils/libutils.a ../klm/search/libksearch.a ../klm/lm/libklm.a ../klm/util/libklm_util.a ../klm/util/double-conversion/libklm_util_double.a ../synutils/maxent-3.0/libtsuruoka_maxent.a -lgfortran
-cdec_LDFLAGS= -rdynamic
 
 AM_CPPFLAGS = -DTEST_DATA=\"$(top_srcdir)/decoder/test_data\" -DBOOST_TEST_DYN_LINK -W -Wno-sign-compare -I$(top_srcdir) -I$(top_srcdir)/mteval -I$(top_srcdir)/utils -I$(top_srcdir)/klm -I$(top_srcdir)/synutils
 
@@ -38,7 +41,6 @@ libcdec_a_SOURCES = \
   decoder.h \
   dwarf.h \
   earley_composer.h \
-  exp_semiring.h \
   factored_lexicon_helper.h \
   ff.h \
   ff_basic.h \
@@ -51,6 +53,7 @@ libcdec_a_SOURCES = \
   ff_factory.h \
   ff_hash.h \
   ff_klm.h \
+	ff_lexical.h \
   ff_lm.h \
   ff_ngrams.h \
   ff_parse_match.h \
@@ -139,6 +142,7 @@ libcdec_a_SOURCES = \
   ffset.cc \
   forest_writer.cc \
   fst_translator.cc \
+  tree2string_translator.cc \
   grammar.cc \
   hg.cc \
   hg_intersect.cc \
@@ -151,6 +155,9 @@ libcdec_a_SOURCES = \
   lattice.cc \
   lexalign.cc \
   lextrans.cc \
+  node_state_hash.h \
+  tree_fragment.cc \
+  tree_fragment.h \
   maxtrans_blunsom.cc \
   phrasebased_translator.cc \
   phrasetable_fst.cc \

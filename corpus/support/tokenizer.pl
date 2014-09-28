@@ -240,6 +240,10 @@ sub proc_token {
 	return $token;
     }
 
+    if($token =~ /^\d+(.\d+)+(亿|百万|万|千)?$/){
+	return $token;
+    }
+
     ## 1,234,345.34
     if($token =~ /^\d+(\.\d{3})*,\d+$/){
 	## number
@@ -382,7 +386,7 @@ sub deep_proc_token {
     }
 
     ##### step 1: separate by punct T2 on the boundary
-    my $t2 = '\`|\!|\@|\+|\=|\[|\]|\<|\>|\||\(|\)|\{|\}|\?|\"|;';
+    my $t2 = '\`|\!|\@|\+|\=|\[|\]|\<|\>|\||\(|\)|\{|\}|\?|\"|;|●|○';
     if($line =~ s/^(($t2)+)/$1 /){
 	return proc_line($line);
     }

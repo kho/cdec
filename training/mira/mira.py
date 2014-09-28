@@ -143,6 +143,12 @@ def main():
   parser.add_argument('--pass-suffix', 
                       help='multipass decoding iteration. see documentation '
                            'at www.cdec-decoder.org for more information')
+  parser.add_argument('--qsub',
+                      help='use qsub', action='store_true')
+  parser.add_argument('--pmem',
+                      help='memory for qsub', type=str, default='5G')
+  parser.add_argument('-v', '--verbose',
+                      help='more verbose mira optimizers')
   args = parser.parse_args()
 
   args.metric = args.metric.upper()
@@ -201,14 +207,15 @@ def main():
   if have_mpl: graph_file = graph(args.output_dir, hope_best_fear, args.metric)
 
   dev_results, dev_bleu = evaluate(args.devset, args.weights, args.config, 
-                         script_dir, args.output_dir)
+                         script_dir, args.output_dir, args.jobs)
   if args.test:
     if args.test_config:
       test_results, test_bleu = evaluate(args.test, args.weights, 
-                              args.test_config, script_dir, args.output_dir)
+                              args.test_config, script_dir, args.output_dir,
+                              args.jobs)
     else:
       test_results, test_bleu = evaluate(args.test, args.weights, args.config,
-                              script_dir, args.output_dir)
+                              script_dir, args.output_dir, args.jobs)
   else: 
     test_results = ''
     test_bleu = ''
@@ -238,11 +245,11 @@ def graph(output_dir, hope_best_fear, metric):
   return graph_file
 
 #evaluate a given test set using decode-and-evaluate.pl
-def evaluate(testset, weights, ini, script_dir, out_dir):
+def evaluate(testset, weights, ini, script_dir, out_dir, jobs):
   evaluator = '{}/../utils/decode-and-evaluate.pl'.format(script_dir)
   try:
     p = subprocess.Popen([evaluator, '-c', ini, '-w', weights, '-i', testset, 
-                         '-d', out_dir, '--jobs', args.jobs], stdout=subprocess.PIPE)
+                         '-d', out_dir, '--jobs', str(jobs)], stdout=subprocess.PIPE)
     results, err = p.communicate()
     bleu, results = results.split('\n',1)
   except subprocess.CalledProcessError:
@@ -314,6 +321,8 @@ def split_devset(dev, outdir):
 
 def optimize(args, script_dir, dev_size):
   parallelize = script_dir+'/../utils/parallelize.pl'
+  if args.qsub:
+    parallelize += " -p %s"%args.pmem
   decoder = script_dir+'/kbest_cut_mira'
   (source, refs) = split_devset(args.devset, args.output_dir)
   port = random.randint(15000,50000)
@@ -352,10 +361,15 @@ def optimize(args, script_dir, dev_size):
       decoder_cmd += ' -a'
     if not args.no_pseudo:
       decoder_cmd += ' -e'
+    if args.verbose:
+      decoder_cmd += ' -v'
     
-    #always use fork 
-    parallel_cmd = '{0} --use-fork -e {1} -j {2} --'.format(
-                    parallelize, logdir, args.jobs)
+    if args.qsub:
+      parallel_cmd = '{0} -e {1} -j {2} --'.format(
+                      parallelize, logdir, args.jobs)
+    else:
+      parallel_cmd = '{0} --use-fork -e {1} -j {2} --'.format(
+                      parallelize, logdir, args.jobs)
     
     cmd = parallel_cmd + ' ' + decoder_cmd
     logging.info('OPTIMIZATION COMMAND: {}'.format(cmd))

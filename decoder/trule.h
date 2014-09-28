@@ -15,6 +15,8 @@
 class TRule;
 typedef boost::shared_ptr<TRule> TRulePtr;
 
+namespace cdec { struct TreeFragment; }
+
 struct AlignmentPoint {
   AlignmentPoint() : s_(), t_() {}
   AlignmentPoint(int s, int t) : s_(s), t_(t) {}
@@ -40,6 +42,9 @@ class TRule {
       scores_.set_value(feat_ids[i], feat_vals[i]);
   }
 
+  TRule(WordID lhs, const WordID* src, int src_size, const WordID* trg, int trg_size, int arity, int pi, int pj) :
+    e_(trg, trg + trg_size), f_(src, src + src_size), lhs_(lhs), arity_(arity), prev_i(pi), prev_j(pj) {}
+
   bool IsGoal() const;
 
   explicit TRule(const std::vector<WordID>& e) : e_(e), lhs_(0), prev_i(-1), prev_j(-1) {}
@@ -49,23 +54,18 @@ class TRule {
   TRule(const TRule& other) :
     e_(other.e_), f_(other.f_), lhs_(other.lhs_), scores_(other.scores_), arity_(other.arity_), prev_i(-1), prev_j(-1), a_(other.a_) {}
 
-  // if mono or strict is true, then lexer won't be used, and //FIXME: > 9 variables won't work
-  explicit TRule(const std::string& text, bool strict = false, bool mono = false) : prev_i(-1), prev_j(-1) {
-    ReadFromString(text, strict, mono);
+  explicit TRule(const std::string& text, bool mono = false) : prev_i(-1), prev_j(-1) {
+    ReadFromString(text, mono);
   }
 
-  // deprecated, use lexer
   // make a rule from a hiero-like rule table, e.g.
   //    [X] ||| [X,1] DE [X,2] ||| [X,2] of the [X,1]
-  // if misformatted, returns NULL
   static TRule* CreateRuleSynchronous(const std::string& rule);
 
-  // deprecated, use lexer
   // make a rule from a phrasetable entry (i.e., one that has no LHS type), e.g:
   //    el gato ||| the cat ||| Feature_2=0.34
   static TRule* CreateRulePhrasetable(const std::string& rule);
 
-  // deprecated, use lexer
   // make a rule from a non-synchrnous CFG representation, e.g.:
   //    [LHS] ||| term1 [NT] term2 [OTHER_NT] [YET_ANOTHER_NT]
   static TRule* CreateRuleMonolingual(const std::string& rule);
@@ -78,11 +78,10 @@ class TRule {
                    std::vector<WordID>* result) const {
     unsigned vc = 0;
     result->clear();
-    for (std::vector<WordID>::const_iterator i = e_.begin(); i != e_.end(); ++i) {
-      const WordID& c = *i;
+    for (const auto& c : e_) {
       if (c < 1) {
         ++vc;
-        const std::vector<WordID>& var_value = *var_values[-c];
+        const auto& var_value = *var_values[-c];
         std::copy(var_value.begin(),
                   var_value.end(),
                   std::back_inserter(*result));
@@ -97,10 +96,9 @@ class TRule {
                    std::vector<WordID>* result) const {
     unsigned vc = 0;
     result->clear();
-    for (std::vector<WordID>::const_iterator i = f_.begin(); i != f_.end(); ++i) {
-      const WordID& c = *i;
+    for (const auto& c : f_) {
       if (c < 1) {
-        const std::vector<WordID>& var_value = *var_values[vc++];
+        const auto& var_value = *var_values[vc++];
         std::copy(var_value.begin(),
                   var_value.end(),
                   std::back_inserter(*result));
@@ -111,7 +109,7 @@ class TRule {
     assert(vc == var_values.size());
   }
 
-  bool ReadFromString(const std::string& line, bool strict = false, bool monolingual = false);
+  bool ReadFromString(const std::string& line, bool monolingual = false);
 
   bool Initialized() const { return e_.size(); }
 
@@ -148,6 +146,9 @@ class TRule {
   SparseVector<double> scores_;
 
   char arity_;
+  std::vector<WordID> ext_states_; // in t2s or t2t translation, this is of length arity_ and
+                                   // indicates what state the transducer is in after having processed
+                                   // this transduction rule
 
   // these attributes are application-specific and should probably be refactored
   TRulePtr parent_rule_;  // usually NULL, except when doing constrained decoding
@@ -161,9 +162,11 @@ class TRule {
   // only for coarse-to-fine decoding
   boost::shared_ptr<std::vector<TRulePtr> > fine_rules_;
 
+  // optional, shows internal structure of TSG rules
+  boost::shared_ptr<cdec::TreeFragment> tree_structure;
+
  private:
   TRule(const WordID& src, const WordID& trg) : e_(1, trg), f_(1, src), lhs_(), arity_(), prev_i(), prev_j() {}
-  bool SanityCheck() const;
 };
 
 inline size_t hash_value(const TRule& r) {
