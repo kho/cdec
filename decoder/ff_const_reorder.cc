@@ -9,6 +9,7 @@
 
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <stdio.h>
 
@@ -64,7 +65,6 @@ inline void NewAndCopyCharArray(char** p, const char* q) {
     (*p) = NULL;
 }
 
-// TODO:to make the alignment more efficient
 struct TargetTranslation {
   TargetTranslation(int begin_pos, int end_pos,int e_num_word)
       : begin_pos_(begin_pos),
@@ -76,6 +76,36 @@ struct TargetTranslation {
         vec_e_align_bit_array_(e_num_word) {
     int len = end_pos - begin_pos + 1;
     align_.reserve(1.5 * len);
+  }
+
+  uint64_t Hash() const {
+    string data;
+    data.append(reinterpret_cast<const char*>(&begin_pos_), sizeof(begin_pos_));
+    data.append(reinterpret_cast<const char*>(&end_pos_), sizeof(end_pos_));
+    data.append(reinterpret_cast<const char*>(&e_num_words_),
+                sizeof(e_num_words_));
+    // Lengths of the following vectors are dependent on begin_pos_, end_pos_,
+    // and e_num_words_. Thus there is no need to store their lengths.
+    data.append(reinterpret_cast<const char*>(vec_left_most_.data()),
+                sizeof(short) * vec_left_most_.size());
+    data.append(reinterpret_cast<const char*>(vec_right_most_.data()),
+                sizeof(short) * vec_right_most_.size());
+    // There is no vector<bool>::data().
+    for (const auto& v : vec_f_align_bit_array_) {
+      size_t size = v.size();
+      data.append(reinterpret_cast<const char*>(&size), sizeof(size));
+      for (bool b : v) {
+        data.push_back(static_cast<char>(b));
+      }
+    }
+    for (const auto& v : vec_e_align_bit_array_) {
+      size_t size = v.size();
+      data.append(reinterpret_cast<const char*>(&size), sizeof(size));
+      for (bool b : v) {
+        data.push_back(static_cast<char>(b));
+      }
+    }
+    return murmur_hash<string>()(data);
   }
 
   void InsertAlignmentPoint(int s, int t) {
@@ -310,7 +340,7 @@ struct ConstReorderFeatureImpl {
     delete dict_block_status_;
   }
 
-  static int ReserveStateSize() { return 1 * sizeof(TargetTranslation*); }
+  static int ReserveStateSize() { return sizeof(State); }
 
   void InitializeInputSentence(const std::string& parse_file,
                                const std::string& srl_file) {
@@ -359,28 +389,22 @@ struct ConstReorderFeatureImpl {
                               void* state) {
     if (parsed_tree_ == NULL) return;
 
-    short int begin = edge.i_, end = edge.j_ - 1;
-
-    typedef TargetTranslation* PtrTargetTranslation;
-    PtrTargetTranslation* remnant =
-        reinterpret_cast<PtrTargetTranslation*>(state);
-
-    vector<const TargetTranslation*> vec_node;
-    vec_node.reserve(edge.tail_nodes_.size());
+    vector<const TargetTranslation*> vec_node(edge.tail_nodes_.size());
     for (size_t i = 0; i < edge.tail_nodes_.size(); i++) {
-      const PtrTargetTranslation* astate =
-          reinterpret_cast<const PtrTargetTranslation*>(ant_states[i]);
-      vec_node.push_back(astate[0]);
+      auto iter = state_map_.find(*reinterpret_cast<const State*>(ant_states[i]));
+      assert(iter != state_map_.end());
+      vec_node[i] = iter->second;
     }
 
+    short int begin = edge.i_, end = edge.j_ - 1;
     int e_num_word = edge.rule_->e_.size();
     for (size_t i = 0; i < vec_node.size(); i++) {
       e_num_word += vec_node[i]->e_num_words_;
       e_num_word--;
     }
 
-    remnant[0] = new TargetTranslation(begin, end, e_num_word);
-    vec_target_tran_.push_back(remnant[0]);
+    auto remnant = new TargetTranslation(begin, end, e_num_word);
+    vec_target_tran_.push_back(remnant);
 
     // reset the alignment
     // for the source side, we know its position in source sentence
@@ -430,18 +454,22 @@ struct ConstReorderFeatureImpl {
       const vector<AlignmentPoint>& align =
           vec_node[-1 * edge.rule_->e_[j]]->align_;
       for (size_t k = 0; k < align.size(); k++) {
-        remnant[0]->InsertAlignmentPoint(align[k].s_, eindex + align[k].t_);
+        remnant->InsertAlignmentPoint(align[k].s_, eindex + align[k].t_);
       }
     }
     for (size_t i = 0; i < edge.rule_->a_.size(); i++) {
       int findex = f_index[edge.rule_->a_[i].s_];
       int eindex = e_index[edge.rule_->a_[i].t_];
-      remnant[0]->InsertAlignmentPoint(findex, eindex);
+      remnant->InsertAlignmentPoint(findex, eindex);
     }
 
     // till now, we finished setting state values
+    State remnant_state = {remnant->Hash(), edge.head_node_};
+    *reinterpret_cast<State*>(state) = remnant_state;
+    state_map_[remnant_state] = remnant;
+
     // next, use the state values to calculate constituent reorder feature
-    SetConstReorderFeature(begin, end, features, remnant[0],
+    SetConstReorderFeature(begin, end, features, remnant,
                            vec_node, f_index);
   }
 
@@ -796,6 +824,8 @@ struct ConstReorderFeatureImpl {
   }
 
   void FreeSentenceVariables() {
+    state_map_.clear();
+
     if (srl_sentence_ != NULL) {
       delete srl_sentence_;
       srl_sentence_ = NULL;
@@ -1031,6 +1061,20 @@ struct ConstReorderFeatureImpl {
   }
 
  private:
+  struct State {
+    uint64_t target_translation_hash;
+    int node_id;
+
+    bool operator==(const State& that) const {
+      return target_translation_hash == that.target_translation_hash &&
+             node_id == that.node_id;
+    }
+  };
+
+  typedef unordered_map<State, const TargetTranslation *, murmur_hash<State> > StateMap;
+
+  StateMap state_map_;
+
   Tsuruoka_Maxent* const_reorder_classifier_left_;
   Tsuruoka_Maxent* const_reorder_classifier_right_;
 
