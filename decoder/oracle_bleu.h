@@ -253,6 +253,8 @@ struct OracleBleu {
   }
 
   bool show_derivation;
+  int show_derivation_mask;
+
   template <class Filter>
   void kbest(int sent_id, Hypergraph const& forest, int k, bool mr_mira_compat,
              int src_len, std::ostream& kbest_out = std::cout,
@@ -286,7 +288,7 @@ struct OracleBleu {
       if (show_derivation) {
         deriv_out<<"\nsent_id="<<sent_id<<"."<<i<<" ||| "; //where i is candidate #/k
         deriv_out<<log(d->score)<<"\n";
-        deriv_out<<kbest.derivation_tree(*d,true);
+        deriv_out<<kbest.derivation_tree(*d,true, show_derivation_mask);
         deriv_out<<"\n"<<flush;
       }
     }

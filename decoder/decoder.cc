@@ -406,6 +406,7 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
         ("csplit_preserve_full_word", "(Compound splitter) Always include the unsegmented form in the output lattice")
         ("extract_rules", po::value<string>(), "Extract the rules used in translation (not de-duped!) to a file in this directory")
         ("show_derivations", po::value<string>(), "Directory to print the derivation structures to")
+        ("show_derivations_mask", po::value<int>()->default_value(Hypergraph::SPAN|Hypergraph::RULE), "Bit-mask for what to print in derivation structures")
         ("graphviz","Show (constrained) translation forest in GraphViz format")
         ("max_translation_beam,x", po::value<int>(), "Beam approximation to get max translation from the chart")
         ("max_translation_sample,X", po::value<int>(), "Sample the max translation from the chart")
@@ -668,6 +669,7 @@ DecoderImpl::DecoderImpl(po::variables_map& conf, int argc, char** argv, istream
   unique_kbest = conf.count("unique_k_best");
   get_oracle_forest = conf.count("get_oracle_forest");
   oracle.show_derivation=conf.count("show_derivations");
+  oracle.show_derivation_mask=conf["show_derivations_mask"].as<int>();
   remove_intersected_rule_annotations = conf.count("remove_intersected_rule_annotations");
   mr_mira_compat = conf.count("mr_mira_compat");
 
