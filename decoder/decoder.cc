@@ -87,7 +87,7 @@ struct ELengthWeightFunction {
   }
 };
 inline void ShowBanner() {
-  cerr << "cdec (c) 2009--2014 by Chris Dyer\n";
+  cerr << "cdec (c) 2009--2014 by Chris Dyer" << endl;
 }
 
 inline string str(char const* name,po::variables_map const& conf) {
@@ -956,14 +956,14 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
       Hypergraph new_hg;
       {
         ReadFile rf(writer.fname_);
-        bool succeeded = HypergraphIO::ReadFromJSON(rf.stream(), &new_hg);
+        bool succeeded = HypergraphIO::ReadFromBinary(rf.stream(), &new_hg);
         if (!succeeded) abort();
       }
       HG::Union(forest, &new_hg);
-      bool succeeded = writer.Write(new_hg, false);
+      bool succeeded = writer.Write(new_hg);
       if (!succeeded) abort();
     } else {
-      bool succeeded = writer.Write(forest, false);
+      bool succeeded = writer.Write(forest);
       if (!succeeded) abort();
     }
   }
@@ -1049,14 +1049,14 @@ bool DecoderImpl::Decode(const string& input, DecoderObserver* o) {
           Hypergraph new_hg;
           {
             ReadFile rf(writer.fname_);
-            bool succeeded = HypergraphIO::ReadFromJSON(rf.stream(), &new_hg);
+            bool succeeded = HypergraphIO::ReadFromBinary(rf.stream(), &new_hg);
             if (!succeeded) abort();
           }
           HG::Union(forest, &new_hg);
-          bool succeeded = writer.Write(new_hg, false);
+          bool succeeded = writer.Write(new_hg);
           if (!succeeded) abort();
         } else {
-          bool succeeded = writer.Write(forest, false);
+          bool succeeded = writer.Write(forest);
           if (!succeeded) abort();
         }
       }

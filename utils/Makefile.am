@@ -39,11 +39,8 @@ libutils_a_SOURCES = \
   have_64_bits.h \
   indices_after.h \
   kernel_string_subseq.h \
-  lbfgs.h \
-  lbfgs.cpp \
   logval.h \
   m.h \
-  mathvec.h \
   maxent.h \
   maxent.cpp \
   murmur_hash3.h \
@@ -51,8 +48,6 @@ libutils_a_SOURCES = \
   named_enum.h \
   null_deleter.h \
   null_traits.h \
-  owlqn.cpp \
-  sgd.cpp \
   perfect_hash.h \
   prob.h \
   sampler.h \
